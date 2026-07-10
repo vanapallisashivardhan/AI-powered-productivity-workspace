@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Productivity Workspace - Settings</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: rgba(30, 41, 59, 0.7);
+            --sidebar-bg: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-color: #3b82f6;
+            --accent-gradient: linear-gradient(135deg, #3b82f6, #6366f1);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --card-radius: 16px;
+        }
+        [data-theme="light"] {
+            --bg-primary: #f1f5f9;
+            --bg-secondary: rgba(255, 255, 255, 0.7);
+            --sidebar-bg: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --accent-color: #2563eb;
+            --accent-gradient: linear-gradient(135deg, #2563eb, #4f46e5);
+            --border-color: rgba(0, 0, 0, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: var(--bg-primary); color: var(--text-primary); display: flex; min-height: 100vh; }
+        
+        .sidebar { width: 260px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; position: fixed; height: 100vh; }
+        .sidebar-brand { padding: 24px; font-size: 1.25rem; font-weight: 700; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border-color); }
+        .sidebar-menu { list-style: none; padding: 24px 16px; display: flex; flex-direction: column; gap: 8px; }
+        .sidebar-item a { display: flex; align-items: center; gap: 16px; padding: 14px 16px; color: var(--text-secondary); text-decoration: none; border-radius: 12px; }
+        .sidebar-item.active a, .sidebar-item a:hover { background: var(--accent-gradient); color: #ffffff; }
+
+        .main-content { margin-left: 260px; flex-grow: 1; padding: 40px; max-width: calc(100% - 260px); }
+        .navbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; background: var(--bg-secondary); backdrop-filter: blur(12px); padding: 16px 24px; border-radius: var(--card-radius); border: 1px solid var(--border-color); }
+
+        .card { background: var(--bg-secondary); backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: var(--card-radius); padding: 24px; box-shadow: var(--glass-shadow); margin-bottom: 24px; }
+        
+        .settings-row { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border-color); }
+        .settings-row:last-child { border-bottom: none; }
+        
+        .btn-action { padding: 10px 20px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; color: white; }
+        .btn-danger { background: #ef4444; }
+        .btn-primary { background: #3b82f6; }
+        .btn-success { background: #10b981; }
+
+        .toggle-switch { position: relative; width: 60px; height: 34px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #3b82f6; }
+        input:checked + .slider:before { transform: translateX(26px); }
+    </style>
+</head>
+<body>
+
+    <nav class="sidebar">
+        <div class="sidebar-brand"><i class="fa-solid fa-brain"></i><span>Workspace Pro</span></div>
+        <ul class="sidebar-menu">
+            <li class="sidebar-item"><a href="index.html"><i class="fa-solid fa-chart-pie"></i><span>Dashboard</span></a></li>
+            <li class="sidebar-item"><a href="tasks.html"><i class="fa-solid fa-list-check"></i><span>Tasks</span></a></li>
+            <li class="sidebar-item"><a href="meetings.html"><i class="fa-solid fa-video"></i><span>Meetings</span></a></li>
+            <li class="sidebar-item"><a href="analysis.html"><i class="fa-solid fa-chart-line"></i><span>Analysis</span></a></li>
+            <li class="sidebar-item active"><a href="settings.html"><i class="fa-solid fa-gear"></i><span>Settings</span></a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content">
+        <header class="navbar">
+            <h2>Workspace System Preferences</h2>
+            <div style="font-weight: 600;">Control Core Console</div>
+        </header>
+
+        <section style="max-width: 800px;">
+            <div class="card">
+                <h3>Visuals & Theme Layer Configurations</h3>
+                <div class="settings-row">
+                    <div><strong>Dark Mode System Configuration</strong><p style="font-size:0.85rem; color:var(--text-secondary);">Toggle system wide low-light UI configuration matrix properties</p></div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="theme-toggle-checkbox" onchange="handleThemeToggleChange(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="card" style="border: 1px solid rgba(239, 68, 68, 0.4);">
+                <h3 style="color:#ef4444;">Danger Zone System Clear Directives</h3>
+                <div class="settings-row">
+                    <div><strong>Purge Workspace & Reset LocalStorage Space</strong><p style="font-size:0.85rem; color:var(--text-secondary);">Irreversibly vaporizes all current tasks, meetings, and activity audit trails logs</p></div>
+                    <button class="btn-action btn-danger" onclick="purgeWorkspaceMemory()"><i class="fa-solid fa-trash-can"></i> Factory Wipe Space</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        function initSettingsForm() {
+            const currentSettings = JSON.parse(localStorage.getItem('settings')) || {theme:'dark'};
+            document.documentElement.setAttribute('data-theme', currentSettings.theme);
+            document.getElementById('theme-toggle-checkbox').checked = (currentSettings.theme === 'dark');
+        }
+
+        function handleThemeToggleChange(isDark) {
+            const newThemeString = isDark ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', newThemeString);
+            
+            const settingsObj = JSON.parse(localStorage.getItem('settings')) || {};
+            settingsObj.theme = newThemeString;
+            localStorage.setItem('settings', JSON.stringify(settingsObj));
+            
+            // Record to Event Tracking System Logs
+            let logs = JSON.parse(localStorage.getItem('activity')) || [];
+            logs.unshift({log: `Theme presentation layer systematically adjusted to: ${newThemeString.toUpperCase()}`, time: new Date().toLocaleString()});
+            localStorage.setItem('activity', JSON.stringify(logs.slice(0, 15)));
+        }
+
+        function purgeWorkspaceMemory() {
+            if(confirm("Are you absolutely positive you want to completely erase the client storage runtime footprint? This operation cannot be rolled back!")) {
+                localStorage.clear();
+                alert("Runtime engine storage spaces successfully cleared out to defaults.");
+                window.location.href = 'index.html';
+            }
+        }
+
+        window.onload = initSettingsForm;
+    </script>
+    <script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Productivity Workspace - Analysis</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: rgba(30, 41, 59, 0.7);
+            --sidebar-bg: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-color: #10b981;
+            --accent-gradient: linear-gradient(135deg, #10b981, #3b82f6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --card-radius: 16px;
+        }
+        [data-theme="light"] {
+            --bg-primary: #f1f5f9;
+            --bg-secondary: rgba(255, 255, 255, 0.7);
+            --sidebar-bg: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --accent-color: #059669;
+            --accent-gradient: linear-gradient(135deg, #059669, #2563eb);
+            --border-color: rgba(0, 0, 0, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: var(--bg-primary); color: var(--text-primary); display: flex; min-height: 100vh; }
+        
+        .sidebar { width: 260px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; position: fixed; height: 100vh; }
+        .sidebar-brand { padding: 24px; font-size: 1.25rem; font-weight: 700; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border-color); }
+        .sidebar-menu { list-style: none; padding: 24px 16px; display: flex; flex-direction: column; gap: 8px; }
+        .sidebar-item a { display: flex; align-items: center; gap: 16px; padding: 14px 16px; color: var(--text-secondary); text-decoration: none; border-radius: 12px; }
+        .sidebar-item.active a, .sidebar-item a:hover { background: var(--accent-gradient); color: #ffffff; }
+
+        .main-content { margin-left: 260px; flex-grow: 1; padding: 40px; max-width: calc(100% - 260px); }
+        .navbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; background: var(--bg-secondary); backdrop-filter: blur(12px); padding: 16px 24px; border-radius: var(--card-radius); border: 1px solid var(--border-color); }
+
+        .analysis-grid { display: grid; grid-template-columns: 1fr; gap: 24px; margin-bottom: 32px; }
+        .metric-card { background: var(--bg-secondary); backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: var(--card-radius); padding: 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--glass-shadow); max-width: 400px; }
+        .metric-info h3 { font-size: 2rem; font-weight: 700; margin-top: 4px; }
+        .metric-icon { width: 48px; height: 48px; border-radius: 12px; background: rgba(16, 185, 129, 0.1); color: #10b981; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+
+        .charts-container { display: grid; grid-template-columns: 1fr; gap: 24px; }
+        .chart-card { background: var(--bg-secondary); backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: var(--card-radius); padding: 24px; box-shadow: var(--glass-shadow); height: 420px; }
+        
+        .voice-fab { position: fixed; bottom: 32px; right: 32px; width: 64px; height: 64px; border-radius: 50%; background: var(--accent-gradient); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border: none; cursor: pointer; z-index: 1000; }
+        .voice-fab.listening { animation: pulse 1.5s infinite; background: linear-gradient(135deg, #ef4444, #3b82f6); }
+        .voice-status-toast { position: fixed; bottom: 110px; right: 32px; background: rgba(15, 23, 42, 0.9); color: #fff; padding: 12px 20px; border-radius: 30px; font-size: 0.9rem; z-index: 1000; display: none; border: 1px solid var(--border-color); }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); box-shadow: 0 0 20px rgba(59, 130, 246, 0.6); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+    <nav class="sidebar">
+        <div class="sidebar-brand"><i class="fa-solid fa-brain"></i><span>Workspace Pro</span></div>
+        <ul class="sidebar-menu">
+            <li class="sidebar-item"><a href="index.html"><i class="fa-solid fa-chart-pie"></i><span>Dashboard</span></a></li>
+            <li class="sidebar-item"><a href="tasks.html"><i class="fa-solid fa-list-check"></i><span>Tasks</span></a></li>
+            <li class="sidebar-item"><a href="meetings.html"><i class="fa-solid fa-video"></i><span>Meetings</span></a></li>
+            <li class="sidebar-item active"><a href="analysis.html"><i class="fa-solid fa-chart-line"></i><span>Analysis</span></a></li>
+            <li class="sidebar-item"><a href="settings.html"><i class="fa-solid fa-gear"></i><span>Settings</span></a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content">
+        <header class="navbar">
+            <h2>Workspace Performance Data Analytics</h2>
+            <div style="font-weight: 600;">Vector Metric Engine</div>
+        </header>
+
+        <section class="analysis-grid">
+            <div class="metric-card">
+                <div class="metric-info">
+                    <span style="color:var(--text-secondary); font-size:0.9rem;">Productivity Vector</span>
+                    <h3 id="ana-prod-score">0%</h3>
+                </div>
+                <div class="metric-icon" style="color:#3b82f6; background:rgba(59,130,246,0.1);"><i class="fa-solid fa-bolt"></i></div>
+            </div>
+        </section>
+
+        <section class="charts-container">
+            <div class="chart-card">
+                <h3 style="margin-bottom:16px; font-size:1rem; color:var(--text-secondary);">State Distribution Breakdown Matrix</h3>
+                <div style="position: relative; height: calc(100% - 40px);"><canvas id="barDistributionChart"></canvas></div>
+            </div>
+        </section>
+    </main>
+
+    <div class="voice-status-toast" id="voice-toast"><span id="voice-toast-text"></span></div>
+    <button class="voice-fab" id="voice-activation-trigger"><i class="fa-solid fa-microphone"></i></button>
+
+    <script>
+        const AnalysisEngine = {
+            computeAndRenderMetrics() {
+                const tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+                const meetings = JSON.parse(localStorage.getItem('meetings')) || [];
+
+                const compTasks = tasks.filter(t => t.completed).length;
+                const pendTasks = tasks.filter(t => !t.completed).length;
+                const compMeetings = meetings.filter(m => m.completed).length;
+                const pendMeetings = meetings.filter(m => !m.completed).length;
+
+                const totalItems = tasks.length + meetings.length;
+                const score = totalItems === 0 ? 0 : Math.round(((compTasks + compMeetings) / totalItems) * 100);
+
+                if(document.getElementById('ana-prod-score')) {
+                    document.getElementById('ana-prod-score').innerText = score + '%';
+                }
+
+                if(window.chartInstanceBar) window.chartInstanceBar.destroy();
+                window.chartInstanceBar = new Chart(document.getElementById('barDistributionChart').getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: ['Done Tasks', 'Pending Tasks', 'Done Meets', 'Pending Meets'],
+                        datasets: [{
+                            label: 'Total Structural Elements Count',
+                            data: [compTasks, pendTasks, compMeetings, pendMeetings],
+                            backgroundColor: ['#10b981', '#3b82f6', '#ec4899', '#f59e0b']
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+                });
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            AnalysisEngine.computeAndRenderMetrics();
+        });
+    </script>
+    <script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Productivity Workspace - Meetings</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: rgba(30, 41, 59, 0.7);
+            --sidebar-bg: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-color: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #8b5cf6, #ec4899);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --card-radius: 16px;
+        }
+        [data-theme="light"] {
+            --bg-primary: #f1f5f9;
+            --bg-secondary: rgba(255, 255, 255, 0.7);
+            --sidebar-bg: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --accent-color: #7c3aed;
+            --accent-gradient: linear-gradient(135deg, #7c3aed, #db2777);
+            --border-color: rgba(0, 0, 0, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: var(--bg-primary); color: var(--text-primary); display: flex; min-height: 100vh; }
+        
+        .sidebar { width: 260px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; position: fixed; height: 100vh; }
+        .sidebar-brand { padding: 24px; font-size: 1.25rem; font-weight: 700; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border-color); }
+        .sidebar-menu { list-style: none; padding: 24px 16px; display: flex; flex-direction: column; gap: 8px; }
+        .sidebar-item a { display: flex; align-items: center; gap: 16px; padding: 14px 16px; color: var(--text-secondary); text-decoration: none; border-radius: 12px; }
+        .sidebar-item.active a, .sidebar-item a:hover { background: var(--accent-gradient); color: #ffffff; }
+
+        .main-content { margin-left: 260px; flex-grow: 1; padding: 40px; max-width: calc(100% - 260px); }
+        .navbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; background: var(--bg-secondary); backdrop-filter: blur(12px); padding: 16px 24px; border-radius: var(--card-radius); border: 1px solid var(--border-color); }
+
+        .meeting-split { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+        .card { background: var(--bg-secondary); backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: var(--card-radius); padding: 24px; box-shadow: var(--glass-shadow); }
+        
+        .form-group { margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
+        .form-control { width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.05); color: var(--text-primary); }
+        [data-theme="dark"] .form-control { background: rgba(255,255,255,0.05); }
+        
+        .btn-submit { width: 100%; padding: 12px; border-radius: 8px; border: none; background: var(--accent-gradient); color: white; font-weight: 600; cursor: pointer; }
+
+        .meeting-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border-color); border-left: 5px solid #ec4899; margin-bottom: 12px; }
+        .meeting-item.completed { opacity: 0.5; border-left-color: #10b981; }
+        
+        .voice-fab { position: fixed; bottom: 32px; right: 32px; width: 64px; height: 64px; border-radius: 50%; background: var(--accent-gradient); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border: none; cursor: pointer; z-index: 1000; }
+        .voice-fab.listening { animation: pulse 1.5s infinite; background: linear-gradient(135deg, #ef4444, #ec4899); }
+        .voice-status-toast { position: fixed; bottom: 110px; right: 32px; background: rgba(15, 23, 42, 0.9); color: #fff; padding: 12px 20px; border-radius: 30px; font-size: 0.9rem; z-index: 1000; display: none; border: 1px solid var(--border-color); }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+    <nav class="sidebar">
+        <div class="sidebar-brand"><i class="fa-solid fa-brain"></i><span>Workspace Pro</span></div>
+        <ul class="sidebar-menu">
+            <li class="sidebar-item"><a href="index.html"><i class="fa-solid fa-chart-pie"></i><span>Dashboard</span></a></li>
+            <li class="sidebar-item"><a href="tasks.html"><i class="fa-solid fa-list-check"></i><span>Tasks</span></a></li>
+            <li class="sidebar-item active"><a href="meetings.html"><i class="fa-solid fa-video"></i><span>Meetings</span></a></li>
+            <li class="sidebar-item"><a href="analysis.html"><i class="fa-solid fa-chart-line"></i><span>Analysis</span></a></li>
+            <li class="sidebar-item"><a href="settings.html"><i class="fa-solid fa-gear"></i><span>Settings</span></a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content">
+        <header class="navbar">
+            <h2>Meeting Coordination System Space</h2>
+            <div style="font-weight: 600;">Calendar Execution Stack</div>
+        </header>
+
+        <section class="meeting-split">
+            <div class="card">
+                <h3 style="margin-bottom:16px;">Schedule Sync Session</h3>
+                <form id="meeting-form" onsubmit="saveMeetingObject(event)">
+                    <div class="form-group">
+                        <label>Session Title</label>
+                        <input type="text" id="meet-title" class="form-control" required placeholder="Project Scrum, Review, etc...">
+                    </div>
+                    <div class="form-group">
+                        <label>Execution Date</label>
+                        <input type="date" id="meet-date" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Execution Timeline (Time)</label>
+                        <input type="time" id="meet-time" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Participants</label>
+                        <input type="text" id="meet-participants" class="form-control" placeholder="Names or emails split by commas..." required>
+                    </div>
+                    <div class="form-group">
+                        <label>Agenda Description Context</label>
+                        <textarea id="meet-desc" class="form-control" rows="3" placeholder="Define meeting criteria goals..."></textarea>
+                    </div>
+                    <button type="submit" class="btn-submit">Commit Session Array</button>
+                </form>
+            </div>
+
+            <div>
+                <h3 style="margin-bottom: 16px;">Scheduled Workspace Sessions Matrix</h3>
+                <div id="meetings-list-render-zone"></div>
+            </div>
+        </section>
+    </main>
+
+    <div class="voice-status-toast" id="voice-toast"><span id="voice-toast-text"></span></div>
+    <button class="voice-fab" id="voice-activation-trigger"><i class="fa-solid fa-microphone"></i></button>
+
+    <script>
+        // Completely aligned storage layers to work with main.js data maps
+        const MeetingStorage = {
+            get() { return JSON.parse(localStorage.getItem('meetings')) || []; },
+            set(d) { localStorage.setItem('meetings', JSON.stringify(d)); },
+            log(text) {
+                let logs = JSON.parse(localStorage.getItem('activity')) || [];
+                logs.unshift({log: text, time: new Date().toLocaleString()});
+                localStorage.setItem('activity', JSON.stringify(logs.slice(0, 15)));
+            }
+        };
+
+        // Unified rendering window callback to avoid state destruction conflicts
+        function renderMeetingAgenda() {
+            const meetings = MeetingStorage.get();
+            const wrapper = document.getElementById('meetings-list-render-zone');
+
+            if (!wrapper) return;
+
+            if (meetings.length === 0) {
+                wrapper.innerHTML = '<div class="card" style="text-align:center;color:var(--text-secondary);">No meeting objects exist in LocalStorage core grid.</div>';
+                return;
+            }
+
+            // Safe chronological sorting
+            meetings.sort((a,b) => new Date((a.date || '') + ' ' + (a.time || '')) - new Date((b.date || '') + ' ' + (b.time || '')));
+
+            wrapper.innerHTML = meetings.map(m => `
+                <div class="meeting-item ${m.completed ? 'completed' : ''}">
+                    <div>
+                        <strong style="font-size:1.1rem;">${m.title}</strong>
+                        <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:6px;">
+                            <i class="fa-solid fa-calendar"></i> ${m.date || 'No Date'} at ${m.time || 'No Time'} ${m.participants ? `| <strong>Roster:</strong> ${m.participants}` : ''}
+                        </div>
+                        <p style="font-size:0.9rem; margin-top:8px; color:var(--text-primary);">${m.description || 'No descriptive agenda provided.'}</p>
+                    </div>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <button class="btn-submit" style="padding:6px 12px; background:#10b981; width:auto;" onclick="toggleMeetingState(${m.id})"><i class="fa-solid fa-check"></i></button>
+                        <button class="btn-submit" style="padding:6px 12px; background:#ef4444; width:auto;" onclick="deleteMeetingRecord(${m.id})"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function saveMeetingObject(e) {
+            e.preventDefault();
+            const title = document.getElementById('meet-title').value;
+            const date = document.getElementById('meet-date').value;
+            const time = document.getElementById('meet-time').value;
+            const participants = document.getElementById('meet-participants').value;
+            const description = document.getElementById('meet-desc').value;
+
+            const meetings = MeetingStorage.get();
+            meetings.unshift({id: Date.now(), title, date, time, participants, description, completed: false});
+            
+            MeetingStorage.set(meetings);
+            MeetingStorage.log(`Meeting agenda booked manually: "${title}"`);
+            document.getElementById('meeting-form').reset();
+            renderMeetingAgenda();
+            
+            // Sync with dashboard graphics tracking loops if WorkspaceCore engine initialization exists
+            if (typeof WorkspaceCore !== 'undefined' && typeof WorkspaceCore.renderDashboardView === 'function') {
+                WorkspaceCore.renderDashboardView();
+            }
+        }
+
+        function toggleMeetingState(id) {
+            let m = MeetingStorage.get();
+            m = m.map(item => item.id === id ? {...item, completed: !item.completed} : item);
+            MeetingStorage.set(m);
+            renderMeetingAgenda();
+        }
+
+        function deleteMeetingRecord(id) {
+            let m = MeetingStorage.get();
+            m = m.filter(item => item.id !== id);
+            MeetingStorage.set(m);
+            MeetingStorage.log(`Meeting session structural node removed: Signature ${id}`);
+            renderMeetingAgenda();
+        }
+
+        // Attach layout initializer safely behind DOM setup frames
+        window.addEventListener('DOMContentLoaded', () => {
+            renderMeetingAgenda();
+        });
+    </script>
+    <script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Productivity Workspace - Tasks</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: rgba(30, 41, 59, 0.7);
+            --sidebar-bg: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-color: #3b82f6;
+            --accent-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --card-radius: 16px;
+            --transition-speed: 0.3s;
+        }
+        [data-theme="light"] {
+            --bg-primary: #f1f5f9;
+            --bg-secondary: rgba(255, 255, 255, 0.7);
+            --sidebar-bg: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --accent-color: #2563eb;
+            --accent-gradient: linear-gradient(135deg, #2563eb, #7c3aed);
+            --border-color: rgba(0, 0, 0, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; transition: background-color var(--transition-speed), border-color var(--transition-speed); }
+        body { background-color: var(--bg-primary); color: var(--text-primary); display: flex; min-height: 100vh; }
+        
+        .sidebar { width: 260px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; position: fixed; height: 100vh; z-index: 100; }
+        .sidebar-brand { padding: 24px; font-size: 1.25rem; font-weight: 700; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border-color); }
+        .sidebar-menu { list-style: none; padding: 24px 16px; display: flex; flex-direction: column; gap: 8px; flex-grow: 1; }
+        .sidebar-item a { display: flex; align-items: center; gap: 16px; padding: 14px 16px; color: var(--text-secondary); text-decoration: none; border-radius: 12px; font-weight: 500; }
+        .sidebar-item.active a, .sidebar-item a:hover { background: var(--accent-gradient); color: #ffffff; }
+
+        .main-content { margin-left: 260px; flex-grow: 1; padding: 40px; max-width: calc(100% - 260px); }
+        .navbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; background: var(--bg-secondary); backdrop-filter: blur(12px); padding: 16px 24px; border-radius: var(--card-radius); border: 1px solid var(--border-color); box-shadow: var(--glass-shadow); }
+
+        .task-grid-view { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+        .card { background: var(--bg-secondary); backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: var(--card-radius); padding: 24px; box-shadow: var(--glass-shadow); }
+        
+        .form-group { margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; }
+        .form-control { width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.1); color: var(--text-primary); outline: none; }
+        [data-theme="dark"] .form-control { background: rgba(255,255,255,0.05); }
+        
+        .btn-submit { width: 100%; padding: 12px; border-radius: 8px; border: none; background: var(--accent-gradient); color: white; font-weight: 600; cursor: pointer; }
+        
+        .filter-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+        .filter-select { padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); }
+
+        .task-list-wrapper { display: flex; flex-direction: column; gap: 12px; }
+        .task-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border-color); border-left: 5px solid var(--accent-color); }
+        .task-item.completed { opacity: 0.5; border-left-color: #10b981; }
+        .task-actions { display: flex; gap: 8px; }
+        .action-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 4px; }
+        .action-btn.complete { color: #10b981; }
+        .action-btn.delete { color: #ef4444; }
+
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+        .badge.high { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .badge.medium { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .badge.low { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+
+        .voice-fab { position: fixed; bottom: 32px; right: 32px; width: 64px; height: 64px; border-radius: 50%; background: var(--accent-gradient); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; cursor: pointer; box-shadow: 0 10px 25px rgba(59, 130, 246, 0.4); border: none; z-index: 1000; }
+        .voice-status-toast { position: fixed; bottom: 110px; right: 32px; background: rgba(15, 23, 42, 0.9); color: #fff; padding: 12px 20px; border-radius: 30px; font-size: 0.9rem; z-index: 1000; display: none; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.1); }
+    </style>
+</head>
+<body>
+
+    <nav class="sidebar">
+        <div class="sidebar-brand"><i class="fa-solid fa-brain"></i><span>Workspace Pro</span></div>
+        <ul class="sidebar-menu">
+            <li class="sidebar-item"><a href="index.html"><i class="fa-solid fa-chart-pie"></i><span>Dashboard</span></a></li>
+            <li class="sidebar-item active"><a href="tasks.html"><i class="fa-solid fa-list-check"></i><span>Tasks</span></a></li>
+            <li class="sidebar-item"><a href="meetings.html"><i class="fa-solid fa-video"></i><span>Meetings</span></a></li>
+            <li class="sidebar-item"><a href="analysis.html"><i class="fa-solid fa-chart-line"></i><span>Analysis</span></a></li>
+            <li class="sidebar-item"><a href="settings.html"><i class="fa-solid fa-gear"></i><span>Settings</span></a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content">
+        <header class="navbar">
+            <h2>Task Space Management Panel</h2>
+            <div id="live-clock-nav" style="font-weight: 600;">Tasks Configuration Console</div>
+        </header>
+
+        <section class="task-grid-view">
+            <div class="card">
+                <h3 id="form-title" style="margin-bottom: 16px;">Create Workspace Task</h3>
+                <form id="task-creation-form" onsubmit="saveTaskRecord(event)">
+                    <input type="hidden" id="task-edit-id">
+                    <div class="form-group">
+                        <label>Task Title/Objective</label>
+                        <input type="text" id="task-title" class="form-control" placeholder="Type task requirements..." required>
+                    </div>
+                    <div class="form-group">
+                        <label>Priority Class Matrix</label>
+                        <select id="task-priority" class="form-control">
+                            <option value="High">High Priority Execution</option>
+                            <option value="Medium" selected>Medium Priority Allocation</option>
+                            <option value="Low">Low Priority Backlog</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Category Space</label>
+                        <select id="task-category" class="form-control">
+                            <option value="Development">Development Pipeline</option>
+                            <option value="Design">UI/UX Strategy</option>
+                            <option value="Research">Analysis Operations</option>
+                            <option value="General" selected>General Operational Tasks</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Target Execution Due Date</label>
+                        <input type="date" id="task-duedate" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn-submit">Commit to Local Storage Matrix</button>
+                </form>
+            </div>
+
+            <div>
+                <div class="filter-bar">
+                    <input type="text" id="task-search-input" class="filter-select" placeholder="Filter tasks instantly..." oninput="renderTaskCollection()" style="flex-grow:1;">
+                    <select id="filter-priority-select" class="filter-select" onchange="renderTaskCollection()">
+                        <option value="ALL">All Priorities</option>
+                        <option value="High">High Only</option>
+                        <option value="Medium">Medium Only</option>
+                        <option value="Low">Low Only</option>
+                    </select>
+                    <select id="sort-order-select" class="filter-select" onchange="renderTaskCollection()">
+                        <option value="NEWEST">Date Created (Newest)</option>
+                        <option value="DUEDATE">Due Date Target Order</option>
+                    </select>
+                </div>
+
+                <div class="task-list-wrapper" id="master-tasks-render-zone">
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div class="voice-status-toast" id="voice-toast">
+        <i class="fa-solid fa-microphone"></i><span id="voice-toast-text">Voice Core Initializing...</span>
+    </div>
+    <button class="voice-fab" id="voice-activation-trigger"><i class="fa-solid fa-microphone"></i></button>
+
+    <script src="main.js"></script>
+    <script>
+        // Completely routed through the global WorkspaceCore framework to prevent overwrites
+        function renderTaskCollection() {
+            if (typeof WorkspaceCore === 'undefined') return;
+            const tasks = WorkspaceCore.get('tasks') || [];
+            const searchVal = document.getElementById('task-search-input').value.toLowerCase();
+            const priorityFilter = document.getElementById('filter-priority-select').value;
+            const sortOrder = document.getElementById('sort-order-select').value;
+
+            let processingList = [...tasks];
+
+            if(searchVal) {
+                processingList = processingList.filter(t => t.title.toLowerCase().includes(searchVal));
+            }
+            if(priorityFilter !== 'ALL') {
+                processingList = processingList.filter(t => t.priority === priorityFilter);
+            }
+            if(sortOrder === 'DUEDATE') {
+                processingList.sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate));
+            } else {
+                processingList.sort((a,b) => b.id - a.id);
+            }
+
+            const wrapper = document.getElementById('master-tasks-render-zone');
+            if(processingList.length === 0) {
+                wrapper.innerHTML = '<div class="card" style="text-align:center;color:var(--text-secondary);">No tasks match execution filter requirements.</div>';
+                return;
+            }
+
+            wrapper.innerHTML = processingList.map(t => `
+                <div class="task-item ${t.completed ? 'completed' : ''}">
+                    <div>
+                        <span class="badge ${(t.priority || 'Medium').toLowerCase()}">${t.priority || 'Medium'}</span>
+                        <strong style="margin-left:8px; text-decoration: ${t.completed ? 'line-through' : 'none'};">${t.title}</strong>
+                        <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:6px;">
+                            Category: ${t.category || 'General'} | <i class="fa-solid fa-calendar-day"></i> Due: ${t.dueDate}
+                        </div>
+                    </div>
+                    <div class="task-actions">
+                        <button class="action-btn complete" onclick="toggleTaskCompletion(${t.id})" title="Toggle Completion Status"><i class="fa-solid ${t.completed ? 'fa-rotate-left' : 'fa-circle-check'}"></i></button>
+                        <button class="action-btn delete" onclick="deleteTaskRecord(${t.id})" title="Destroy Object Record"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function saveTaskRecord(e) {
+            e.preventDefault();
+            const id = document.getElementById('task-edit-id').value;
+            const title = document.getElementById('task-title').value;
+            const priority = document.getElementById('task-priority').value;
+            const category = document.getElementById('task-category').value;
+            const dueDate = document.getElementById('task-duedate').value;
+
+            let tasks = WorkspaceCore.get('tasks') || [];
+
+            if(id) {
+                tasks = tasks.map(t => t.id == id ? {...t, title, priority, category, dueDate} : t);
+                WorkspaceCore.logActivity(`Task updated explicitly: "${title}"`);
+            } else {
+                tasks.unshift({id: Date.now(), title, priority, category, dueDate, completed: false});
+                WorkspaceCore.logActivity(`Task registered into operational stream: "${title}"`);
+            }
+
+            WorkspaceCore.set('tasks', tasks);
+            document.getElementById('task-creation-form').reset();
+            document.getElementById('task-edit-id').value = '';
+            renderTaskCollection();
+        }
+
+        function toggleTaskCompletion(id) {
+            let tasks = WorkspaceCore.get('tasks') || [];
+            tasks = tasks.map(t => t.id === id ? {...t, completed: !t.completed} : t);
+            WorkspaceCore.set('tasks', tasks);
+            WorkspaceCore.logActivity(`Task object state toggled for target signature: ${id}`);
+            renderTaskCollection();
+        }
+
+        function deleteTaskRecord(id) {
+            let tasks = WorkspaceCore.get('tasks') || [];
+            tasks = tasks.filter(t => t.id !== id);
+            WorkspaceCore.set('tasks', tasks);
+            WorkspaceCore.logActivity(`Task object permanently removed from pipeline matrix: ${id}`);
+            renderTaskCollection();
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            renderTaskCollection();
+        });
+    </script>
+</body>
+</html>
