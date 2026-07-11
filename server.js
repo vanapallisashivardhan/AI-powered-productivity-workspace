@@ -1,12 +1,17 @@
 import express from 'express';
 import cors from 'cors';
 import OpenAI from 'openai';
+import dotenv from 'dotenv'; // 1. Add this line
+
+// 2. Add this line right below your imports to load the keys into process.env
+dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static('.'));
 
+// This will now properly fetch your key from the .env file
 const openai = new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
     apiKey: process.env.OPENROUTER_API_KEY || ""

@@ -143,33 +143,6 @@
             color: var(--text-secondary);
         }
 
-        .search-container {
-            position: relative;
-            width: 300px;
-        }
-
-        .search-container input {
-            width: 100%;
-            padding: 10px 16px 10px 40px;
-            border-radius: 50px;
-            border: 1px solid var(--border-color);
-            background: rgba(0, 0, 0, 0.05);
-            color: var(--text-primary);
-            outline: none;
-        }
-
-        [data-theme="dark"] .search-container input {
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .search-container i {
-            position: absolute;
-            left: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-secondary);
-        }
-
         /* Dashboard Grid Layout */
         .stats-grid {
             display: grid;
@@ -325,10 +298,6 @@
 
     <main class="main-content">
         <header class="navbar">
-            <div class="search-container">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="global-search" placeholder="Search across workspace..." oninput="handleGlobalSearch(this.value)">
-            </div>
             <div class="nav-profile">
                 <div class="clock-container">
                     <div id="live-clock">00:00:00 AM</div>
