@@ -1,9 +1,5 @@
-/**
- * AI-Powered Productivity Workspace - Core Engineering Engine (js/main.js)
- * Fully functional, zero dependencies, persistent LocalStorage State Machine.
- */
+       const WorkspaceCore = {
 
-const WorkspaceCore = {
     // 1. Core State Matrix Initializer
     init() {
         // Unify storage keys across all sub-pages completely
@@ -15,7 +11,6 @@ const WorkspaceCore = {
         if (!localStorage.getItem('activity')) {
             localStorage.setItem('activity', JSON.stringify([{ log: 'Workspace OS initialized.', time: new Date().toLocaleString() }]));
         }
-        
         this.applySystemTheme();
         this.syncLiveClock();
         this.dispatchViewSpecificRenders();
@@ -37,8 +32,7 @@ const WorkspaceCore = {
     // 4. Productivity Formula Architecture Core Validation Node
     computeProductivityScore() {
         const tasks = this.get('tasks') || [];
-        const meetings = this.get('meetings') || [];
-        
+        const meetings = this.get('meetings') || [];       
         const completedTasks = tasks.filter(t => t.completed).length;
         const completedMeetings = meetings.filter(m => m.completed).length;
         const totalActiveItems = tasks.length + meetings.length;
@@ -87,8 +81,7 @@ const WorkspaceCore = {
     // 8. View Sub-Renderer - Dashboard Layout Sync Data Pump
     renderDashboardView() {
         const tasks = this.get('tasks') || [];
-        const meetings = this.get('meetings') || [];
-        
+        const meetings = this.get('meetings') || [];       
         const pendingTasksCount = tasks.filter(t => !t.completed).length;
         const completedTasksCount = tasks.filter(t => t.completed).length;
         const upcomingMeetingsCount = meetings.filter(m => !m.completed).length;
@@ -211,11 +204,35 @@ const WorkspaceCore = {
             updateVoiceUI('processing', "Analyzing intent...");
 
             try {
+                const tasks = this.get('tasks') || [];
+                const meetings = this.get('meetings') || [];
+                const currentPath = window.location.pathname.split('/').pop();
+
+                // Advanced metrics calculation layer to allow contextual analysis reading
+                const compTasks = tasks.filter(t => t.completed).length;
+                const pendTasks = tasks.filter(t => !t.completed).length;
+                const compMeetings = meetings.filter(m => m.completed).length;
+                const pendMeetings = meetings.filter(m => !m.completed).length;
+                const grandTotal = tasks.length + meetings.length;
+                const compositeScore = grandTotal === 0 ? 0 : Math.round(((compTasks + compMeetings) / grandTotal) * 100);
+
                 const currentDataState = {
                     currentDate: new Date().toISOString().split('T')[0],
                     currentTime: new Date().toLocaleTimeString(),
-                    tasks: this.get('tasks') || [],
-                    meetings: this.get('meetings') || []
+                    activePageView: currentPath || 'index.html',
+                    tasks: tasks,
+                    meetings: meetings,
+                    // Injecting analytical summaries explicitly for real-world question interpretation
+                    analysisMetricsSummary: {
+                        totalTasksCount: tasks.length,
+                        completedTasksCount: compTasks,
+                        pendingTasksCount: pendTasks,
+                        totalMeetingsCount: meetings.length,
+                        completedMeetingsCount: compMeetings,
+                        pendingMeetingsCount: pendMeetings,
+                        combinedElementsTotal: grandTotal,
+                        calculatedProductivityRatioScore: compositeScore + '%'
+                    }
                 };
 
                 const response = await fetch('http://localhost:3000/api/voice-command', {
@@ -324,6 +341,7 @@ const WorkspaceCore = {
                     if (speakCallback) speakCallback(`Meeting scheduled: ${data.title}`);
                 }
                 break;
+
             case "COMPLETE_MEETING":
                 if (data.title) {
                     let meetingFound = false;
@@ -357,6 +375,7 @@ const WorkspaceCore = {
                     }
                 }
                 break;
+
             case "CHANGE_THEME":
                 if (data.themeChange) {
                     let settings = this.get('settings') || {};
@@ -394,17 +413,14 @@ const WorkspaceCore = {
     }
 };
 
-// ==========================================================
 // SUPABASE SYNCHRONIZATION OVERRIDES FOR WORKSPACE (REFINED)
-// ==========================================================
 if (typeof WorkspaceCore !== 'undefined') {
     
     // 1. Sync Down from Cloud Database Engine Safely Bypass Interceptor Loop
     WorkspaceCore.syncWithSupabase = async function() {
         try {
             const taskRes = await fetch('http://localhost:3000/api/tasks');
-            const cloudTasks = await taskRes.json();
-            
+            const cloudTasks = await taskRes.json();           
             const formattedTasks = cloudTasks.map(t => ({
                 id: Number(t.id),
                 title: t.title,
@@ -416,8 +432,7 @@ if (typeof WorkspaceCore !== 'undefined') {
             localStorage.setItem('tasks', JSON.stringify(formattedTasks));
 
             const meetRes = await fetch('http://localhost:3000/api/meetings');
-            const cloudMeets = await meetRes.json();
-            
+            const cloudMeets = await meetRes.json();          
             const formattedMeets = cloudMeets.map(m => ({
                 id: Number(m.id),
                 title: m.title,
@@ -428,7 +443,6 @@ if (typeof WorkspaceCore !== 'undefined') {
                 completed: m.completed === true || m.completed === 'true'
             }));
             localStorage.setItem('meetings', JSON.stringify(formattedMeets));
-
             this.dispatchViewSpecificRenders();
             if (typeof renderTaskCollection === 'function') renderTaskCollection();
             if (typeof renderMeetingAgenda === 'function') renderMeetingAgenda();
@@ -438,7 +452,7 @@ if (typeof WorkspaceCore !== 'undefined') {
         }
     };
 
-    // 2. Wrap Init Core Execution Chain (Safe Mode)
+    // 2. Wrap Init Core Execution Chain (Safe Connectivity Injection Bypass)
     const baseInit = WorkspaceCore.init;
     WorkspaceCore.init = async function() {
         try {
@@ -446,7 +460,6 @@ if (typeof WorkspaceCore !== 'undefined') {
         } catch(e) {
             console.error("Supabase dynamic mapping bypassed due to local initialization errors:", e);
         }
-        // ALWAYS run base initialization, guaranteeing voice activation executes regardless of backend connectivity
         baseInit.apply(this, arguments);
     };
 
@@ -505,5 +518,5 @@ if (typeof WorkspaceCore !== 'undefined') {
     });
 }
 
-// Global Event listener hook definition
+// Fire global application lifecycle context setup safely
 window.addEventListener('DOMContentLoaded', () => WorkspaceCore.init());

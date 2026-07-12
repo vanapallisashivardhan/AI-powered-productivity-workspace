@@ -47,7 +47,6 @@
             min-height: 100vh;
             overflow-x: hidden;
         }
-
         /* Sidebar Architecture */
         .sidebar {
             width: 260px;
@@ -72,7 +71,6 @@
             gap: 12px;
             border-bottom: 1px solid var(--border-color);
         }
-
         .sidebar-menu {
             list-style: none;
             padding: 24px 16px;
@@ -81,7 +79,6 @@
             gap: 8px;
             flex-grow: 1;
         }
-
         .sidebar-item a {
             display: flex;
             align-items: center;
@@ -93,13 +90,11 @@
             font-weight: 500;
             transition: all var(--transition-speed);
         }
-
         .sidebar-item.active a, .sidebar-item a:hover {
             background: var(--accent-gradient);
             color: #ffffff;
             box-shadow: var(--glass-shadow);
         }
-
         /* Main Workspace Content */
         .main-content {
             margin-left: 260px;
@@ -107,7 +102,6 @@
             padding: 40px;
             max-width: calc(100% - 260px);
         }
-
         /* Navbar Architecture */
         .navbar {
             display: flex;
@@ -122,13 +116,11 @@
             border: 1px solid var(--border-color);
             box-shadow: var(--glass-shadow);
         }
-
         .nav-profile {
             display: flex;
             align-items: center;
             gap: 16px;
         }
-
         .clock-container {
             text-align: right;
         }
@@ -308,11 +300,10 @@
     </style>
 </head>
 <body>
-
     <nav class="sidebar">
         <div class="sidebar-brand">
             <i class="fa-solid fa-brain"></i>
-            <span>Workspace Pro</span>
+            <span> WorkSpace</span>
         </div>
         <ul class="sidebar-menu">
             <li class="sidebar-item active"><a href="index.html"><i class="fa-solid fa-chart-pie"></i><span>Dashboard</span></a></li>
@@ -322,7 +313,6 @@
             <li class="sidebar-item"><a href="settings.html"><i class="fa-solid fa-gear"></i><span>Settings</span></a></li>
         </ul>
     </nav>
-
     <main class="main-content">
         <header class="navbar">
             <div class="search-container">
@@ -392,10 +382,8 @@
     <button class="voice-fab" id="voice-activation-trigger">
         <i class="fa-solid fa-microphone"></i>
     </button>
-
     <!-- Core Engineering Core State Router Pipeline Execution Module Connection Layer -->
     <script src="main.js"></script>
-
     <script>
         // Synchronized Data Pump Hook
         function refreshDashboardVisuals() {

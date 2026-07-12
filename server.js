@@ -92,9 +92,8 @@ function filterStringToBoolean(val) {
     return val === 'true';
 }
 
-// ==========================================
 // CORE AI VOICE PROCESSING ENDPOINT
-// ==========================================
+
 app.post('/api/voice-command', async (req, res) => {
     const { transcript, currentState } = req.body;
 
@@ -172,9 +171,8 @@ const tools = [
   }
 ];
 
-// ==========================================
 // SUPABASE DATA ENDPOINTS (TASKS)
-// ==========================================
+
 app.get('/api/tasks', async (req, res) => {
     if (!supabase) return res.json([]);
     const { data, error } = await supabase.from('tasks').select('*').order('id', { ascending: false });
@@ -206,9 +204,8 @@ app.delete('/api/tasks/:id', async (req, res) => {
     res.json({ success: true });
 });
 
-// ==========================================
 // SUPABASE DATA ENDPOINTS (MEETINGS)
-// ==========================================
+
 app.get('/api/meetings', async (req, res) => {
     if (!supabase) return res.json([]);
     const { data, error } = await supabase.from('meetings').select('*').order('id', { ascending: false });
@@ -251,9 +248,8 @@ app.delete('/api/meetings/:id', async (req, res) => {
     res.json({ success: true });
 });
 
-// ==========================================
 // START EXPRESS SERVER INFRASTRUCTURE
-// ==========================================
+ 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 Productivity Workspace Backend fully live at http://localhost:${PORT}`);
