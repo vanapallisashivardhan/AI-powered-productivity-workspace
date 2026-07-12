@@ -1,22 +1,31 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import OpenAI from 'openai';
-import dotenv from 'dotenv'; // 1. Add this line
-
-// 2. Add this line right below your imports to load the keys into process.env
-dotenv.config();
+import { createClient } from '@supabase/supabase-js';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static('.'));
 
-// This will now properly fetch your key from the .env file
+// Initialize Supabase Client
+const supabaseUrl = process.env.SUPABASE_URL || "";
+const supabaseKey = process.env.SUPABASE_KEY || "";
+const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
+
+if (supabase) {
+    console.log("⚡ Supabase Cloud Database Client operational!");
+} else {
+    console.log("⚠️ WARNING: Supabase keys missing inside .env configuration!");
+}
+
 const openai = new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
     apiKey: process.env.OPENROUTER_API_KEY || ""
 });
-
 
 const workspaceTools = [
     {
@@ -77,6 +86,15 @@ const workspaceTools = [
     }
 ];
 
+// Helper to sanitize boolean values from dynamic payloads
+function filterStringToBoolean(val) {
+    if (typeof val === 'boolean') return val;
+    return val === 'true';
+}
+
+// ==========================================
+// CORE AI VOICE PROCESSING ENDPOINT
+// ==========================================
 app.post('/api/voice-command', async (req, res) => {
     const { transcript, currentState } = req.body;
 
@@ -92,7 +110,7 @@ app.post('/api/voice-command', async (req, res) => {
             messages: [
                 { 
                     role: "system", 
-                    content: `You are the advanced underlying semantic NLP intelligence router for a high-tech workspace. Current reference timeline: Year 2026.
+                    content: `You are the advanced underlying semantic NLP intelligence router for a high-tech workspace. Reference timeline: Year 2026.
                     
                     You have access to the user's real-time workspace data below:
                     ${formattedState}
@@ -120,6 +138,123 @@ app.post('/api/voice-command', async (req, res) => {
         res.status(500).json({ action: "UNKNOWN", error: "Internal AI processing vector fault." });
     }
 });
+const tools = [
+  {
+    type: "function",
+    function: {
+      name: "process_voice_intent",
+      description: "Analyze voice transcription to determine the workspace intent.",
+      parameters: {
+        type: "object",
+        properties: {
+          command: {
+            type: "string",
+            enum: [
+              "NAVIGATE", 
+              "CREATE_TASK", 
+              "CREATE_MEETING", 
+              "COMPLETE_MEETING", // 👈 ADD THIS
+              "DELETE_MEETING",   // 👈 ADD THIS
+              "ANSWER_QUESTION"
+            ],
+            description: "The actions to take based on user audio input."
+          },
+          // Ensure your parameter object can pass down target titles or keywords
+          targetItem: {
+            type: "string",
+            description: "The name, title, or topic of the meeting/task being targeted for completion or deletion."
+          },
+          // ... keep your other properties like page, taskData, meetingData here
+        },
+        required: ["command"]
+      }
+    }
+  }
+];
 
-const PORT = 3000;
-app.listen(PORT, () => console.log(`🚀 OpenRouter-Powered Productivity Backend operational at http://localhost:${PORT}`));
+// ==========================================
+// SUPABASE DATA ENDPOINTS (TASKS)
+// ==========================================
+app.get('/api/tasks', async (req, res) => {
+    if (!supabase) return res.json([]);
+    const { data, error } = await supabase.from('tasks').select('*').order('id', { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+});
+
+app.post('/api/tasks', async (req, res) => {
+    if (!supabase) return res.status(500).json({ error: "Supabase client uninitialized" });
+    const task = req.body;
+    if (!task.id) return res.status(400).json({ error: "Missing identity index signature" });
+    
+    const { data, error } = await supabase.from('tasks').upsert({
+        id: parseInt(task.id),
+        title: task.title || "Untitled Task",
+        priority: task.priority || "medium",
+        category: task.category || "General",
+        due_date: task.dueDate || task.due_date || new Date().toISOString().split('T')[0],
+        completed: filterStringToBoolean(task.completed)
+    });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+});
+
+app.delete('/api/tasks/:id', async (req, res) => {
+    if (!supabase) return res.status(500).json({ error: "Supabase client uninitialized" });
+    const { error } = await supabase.from('tasks').delete().eq('id', parseInt(req.params.id));
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+});
+
+// ==========================================
+// SUPABASE DATA ENDPOINTS (MEETINGS)
+// ==========================================
+app.get('/api/meetings', async (req, res) => {
+    if (!supabase) return res.json([]);
+    const { data, error } = await supabase.from('meetings').select('*').order('id', { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    
+    const formattedMeetings = data.map(m => ({
+        id: m.id,
+        title: m.title,
+        date: m.date,
+        time: m.time,
+        participants: m.participants || "",
+        description: m.description || "",
+        completed: m.completed
+    }));
+    res.json(formattedMeetings);
+});
+
+app.post('/api/meetings', async (req, res) => {
+    if (!supabase) return res.status(500).json({ error: "Supabase client uninitialized" });
+    const meeting = req.body;
+    if (!meeting.id) return res.status(400).json({ error: "Missing identity index signature" });
+    
+    const { data, error } = await supabase.from('meetings').upsert({
+        id: parseInt(meeting.id),
+        title: meeting.title || "Untitled Meeting",
+        date: meeting.date || new Date().toISOString().split('T')[0],
+        time: meeting.time || "12:00",
+        participants: meeting.participants || "",
+        description: meeting.description || "",
+        completed: filterStringToBoolean(meeting.completed)
+    });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+});
+
+app.delete('/api/meetings/:id', async (req, res) => {
+    if (!supabase) return res.status(500).json({ error: "Supabase client uninitialized" });
+    const { error } = await supabase.from('meetings').delete().eq('id', parseInt(req.params.id));
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+});
+
+// ==========================================
+// START EXPRESS SERVER INFRASTRUCTURE
+// ==========================================
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`🚀 Productivity Workspace Backend fully live at http://localhost:${PORT}`);
+});

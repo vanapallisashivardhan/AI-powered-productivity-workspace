@@ -121,7 +121,7 @@
                         <label>Target Execution Due Date</label>
                         <input type="date" id="task-duedate" class="form-control" required>
                     </div>
-                    <button type="submit" class="btn-submit">Commit to Local Storage Matrix</button>
+                    <button type="submit" class="btn-submit">Commit to Storage Matrix</button>
                 </form>
             </div>
 
@@ -153,8 +153,8 @@
 
     <script src="main.js"></script>
     <script>
-        // Completely routed through the global WorkspaceCore framework to prevent overwrites
-        function renderTaskCollection() {
+        // Set up a global rendering hook that main.js can tap into automatically
+        window.renderTaskCollection = function() {
             if (typeof WorkspaceCore === 'undefined') return;
             const tasks = WorkspaceCore.get('tasks') || [];
             const searchVal = document.getElementById('task-search-input').value.toLowerCase();
@@ -164,13 +164,13 @@
             let processingList = [...tasks];
 
             if(searchVal) {
-                processingList = processingList.filter(t => t.title.toLowerCase().includes(searchVal));
+                processingList = processingList.filter(t => t.title && t.title.toLowerCase().includes(searchVal));
             }
             if(priorityFilter !== 'ALL') {
                 processingList = processingList.filter(t => t.priority === priorityFilter);
             }
             if(sortOrder === 'DUEDATE') {
-                processingList.sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate));
+                processingList.sort((a,b) => new Date(a.dueDate || a.due_date) - new Date(b.dueDate || b.due_date));
             } else {
                 processingList.sort((a,b) => b.id - a.id);
             }
@@ -181,13 +181,15 @@
                 return;
             }
 
-            wrapper.innerHTML = processingList.map(t => `
+            wrapper.innerHTML = processingList.map(t => {
+                const displayDueDate = t.dueDate || t.due_date || '';
+                return `
                 <div class="task-item ${t.completed ? 'completed' : ''}">
                     <div>
                         <span class="badge ${(t.priority || 'Medium').toLowerCase()}">${t.priority || 'Medium'}</span>
-                        <strong style="margin-left:8px; text-decoration: ${t.completed ? 'line-through' : 'none'};">${t.title}</strong>
+                        <strong style="margin-left:8px; text-decoration: ${t.completed ? 'line-through' : 'none'};">${t.title || 'Untitled'}</strong>
                         <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:6px;">
-                            Category: ${t.category || 'General'} | <i class="fa-solid fa-calendar-day"></i> Due: ${t.dueDate}
+                            Category: ${t.category || 'General'} | <i class="fa-solid fa-calendar-day"></i> Due: ${displayDueDate}
                         </div>
                     </div>
                     <div class="task-actions">
@@ -195,9 +197,54 @@
                         <button class="action-btn delete" onclick="deleteTaskRecord(${t.id})" title="Destroy Object Record"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
-            `).join('');
-        }
+            `}).join('');
+        };
+// Replace your existing renderTaskCollection or ensure it looks like this:
+function renderTaskCollection() {
+    const tasks = WorkspaceCore.get('tasks') || [];
+    const container = document.getElementById('task-collection-container');
+    if (!container) return;
 
+    if (tasks.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:2rem;">No operational workflows registered.</div>';
+        return;
+    }
+
+    container.innerHTML = tasks.map(t => `
+        <div class="task-card ${t.completed ? 'completed' : ''}">
+            <div style="flex:1;">
+                <h4 style="margin:0 0 0.5rem 0; ${t.completed ? 'text-decoration:line-through;color:var(--text-secondary);' : ''}">${t.title}</h4>
+                <div style="font-size:0.8rem; color:var(--text-secondary);">
+                    <span><i class="fa-solid fa-calendar-day"></i> ${t.dueDate || 'No Due Date'}</span> | 
+                    <span><i class="fa-solid fa-layer-group"></i> ${t.category || 'General'}</span>
+                </div>
+            </div>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+                <button onclick="editTaskRecord(${t.id})" style="background:transparent; border:none; color:var(--text-secondary); cursor:pointer;"><i class="fa-solid fa-pen-to-square"></i></button>
+                <button onclick="toggleTaskCompletion(${t.id})" style="background:transparent; border:none; color:${t.completed ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer;"><i class="fa-solid ${t.completed ? 'fa-circle-check' : 'fa-circle'}"></i></button>
+                <button onclick="deleteTaskRecord(${t.id})" style="background:transparent; border:none; color:#ef4444; cursor:pointer;"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Add this function right below renderTaskCollection()
+function editTaskRecord(id) {
+    let tasks = WorkspaceCore.get('tasks') || [];
+    let recordToUpdate = tasks.find(t => Number(t.id) === Number(id));
+    
+    if (!recordToUpdate) return;
+    
+    const newTitle = prompt("Update Task Title:", recordToUpdate.title);
+    if (newTitle === null || newTitle.trim() === "") return;
+    
+    recordToUpdate.title = newTitle.trim();
+    
+    // Save to local storage & push upsert request to backend server
+    WorkspaceCore.set('tasks', tasks); 
+    renderTaskCollection();
+    WorkspaceCore.dispatchViewSpecificRenders();
+}
         function saveTaskRecord(e) {
             e.preventDefault();
             const id = document.getElementById('task-edit-id').value;
@@ -212,13 +259,24 @@
                 tasks = tasks.map(t => t.id == id ? {...t, title, priority, category, dueDate} : t);
                 WorkspaceCore.logActivity(`Task updated explicitly: "${title}"`);
             } else {
-                tasks.unshift({id: Date.now(), title, priority, category, dueDate, completed: false});
+                // Generate a valid dynamic payload that syncs cleanly with backend definitions
+                tasks.unshift({
+                    id: Date.now(), 
+                    title, 
+                    priority, 
+                    category, 
+                    dueDate: dueDate, 
+                    due_date: dueDate, 
+                    completed: false
+                });
                 WorkspaceCore.logActivity(`Task registered into operational stream: "${title}"`);
             }
 
             WorkspaceCore.set('tasks', tasks);
             document.getElementById('task-creation-form').reset();
             document.getElementById('task-edit-id').value = '';
+            
+            // Force rendering refresh instantly
             renderTaskCollection();
         }
 
@@ -231,11 +289,16 @@
         }
 
         function deleteTaskRecord(id) {
-            let tasks = WorkspaceCore.get('tasks') || [];
-            tasks = tasks.filter(t => t.id !== id);
-            WorkspaceCore.set('tasks', tasks);
-            WorkspaceCore.logActivity(`Task object permanently removed from pipeline matrix: ${id}`);
-            renderTaskCollection();
+            // If main.js has hooked up the live Supabase deletion framework, call it directly
+            if (typeof window.deleteTaskRecordSupabase === 'function') {
+                window.deleteTaskRecordSupabase(id);
+            } else {
+                let tasks = WorkspaceCore.get('tasks') || [];
+                tasks = tasks.filter(t => t.id !== id);
+                WorkspaceCore.set('tasks', tasks);
+                WorkspaceCore.logActivity(`Task object permanently removed from pipeline matrix: ${id}`);
+                renderTaskCollection();
+            }
         }
 
         window.addEventListener('DOMContentLoaded', () => {

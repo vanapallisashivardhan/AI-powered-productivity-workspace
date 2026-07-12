@@ -211,7 +211,6 @@ const WorkspaceCore = {
             updateVoiceUI('processing', "Analyzing intent...");
 
             try {
-                // Read current local state metrics to provide as context data to backend AI agent
                 const currentDataState = {
                     currentDate: new Date().toISOString().split('T')[0],
                     currentTime: new Date().toLocaleTimeString(),
@@ -224,7 +223,7 @@ const WorkspaceCore = {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         transcript,
-                        currentState: currentDataState // Injects actual live context into the prompt frame matrix
+                        currentState: currentDataState 
                     })
                 });
 
@@ -248,7 +247,7 @@ const WorkspaceCore = {
     },
 
     // 10. Semantic Intent Execution Router Engine
-    executeVoiceIntent(data, speakCallback) {
+    async executeVoiceIntent(data, speakCallback) {
         if (!data || data.action === "UNKNOWN") {
             this.logActivity("Command execution failed: Unrecognized intent matching rules.");
             if (speakCallback) speakCallback("I am not sure how to handle that workspace request yet.");
@@ -325,7 +324,39 @@ const WorkspaceCore = {
                     if (speakCallback) speakCallback(`Meeting scheduled: ${data.title}`);
                 }
                 break;
+            case "COMPLETE_MEETING":
+                if (data.title) {
+                    let meetingFound = false;
+                    meetings = meetings.map(m => {
+                        if (m.title.toLowerCase().includes(data.title.toLowerCase())) {
+                            meetingFound = true;
+                            return { ...m, completed: true };
+                        }
+                        return m;
+                    });
+                    if (meetingFound) {
+                        this.set('meetings', meetings);
+                        this.logActivity(`Completed meeting: "${data.title}"`);
+                        if (speakCallback) speakCallback(`Marked meeting ${data.title} as completed.`);
+                    }
+                }
+                break;
 
+            case "DELETE_MEETING":
+                if (data.title) {
+                    const matchedMeeting = meetings.find(m => m.title.toLowerCase().includes(data.title.toLowerCase()));
+                    if (matchedMeeting) {
+                        if (typeof window.deleteMeetingRecordSupabase === 'function') {
+                            await window.deleteMeetingRecordSupabase(matchedMeeting.id);
+                        } else {
+                            meetings = meetings.filter(m => m.id !== matchedMeeting.id);
+                            this.set('meetings', meetings);
+                        }
+                        this.logActivity(`Deleted meeting: "${data.title}"`);
+                        if (speakCallback) speakCallback(`Deleted meeting ${data.title}.`);
+                    }
+                }
+                break;
             case "CHANGE_THEME":
                 if (data.themeChange) {
                     let settings = this.get('settings') || {};
@@ -356,14 +387,123 @@ const WorkspaceCore = {
                 break;
         }
         
-        // Force rendering sync across the UI layout automatically
         this.dispatchViewSpecificRenders();
-        
-        // Also fire off specific layout overrides if a subpage has custom functions declared
         if (typeof renderTaskCollection === 'function') renderTaskCollection();
         if (typeof renderMeetingAgenda === 'function') renderMeetingAgenda();
         if (typeof refreshDashboardVisuals === 'function') refreshDashboardVisuals();
     }
 };
 
+// ==========================================================
+// SUPABASE SYNCHRONIZATION OVERRIDES FOR WORKSPACE (REFINED)
+// ==========================================================
+if (typeof WorkspaceCore !== 'undefined') {
+    
+    // 1. Sync Down from Cloud Database Engine Safely Bypass Interceptor Loop
+    WorkspaceCore.syncWithSupabase = async function() {
+        try {
+            const taskRes = await fetch('http://localhost:3000/api/tasks');
+            const cloudTasks = await taskRes.json();
+            
+            const formattedTasks = cloudTasks.map(t => ({
+                id: Number(t.id),
+                title: t.title,
+                priority: t.priority || "medium",
+                category: t.category || "General",
+                dueDate: t.due_date || t.dueDate || "",
+                completed: t.completed === true || t.completed === 'true'
+            }));
+            localStorage.setItem('tasks', JSON.stringify(formattedTasks));
+
+            const meetRes = await fetch('http://localhost:3000/api/meetings');
+            const cloudMeets = await meetRes.json();
+            
+            const formattedMeets = cloudMeets.map(m => ({
+                id: Number(m.id),
+                title: m.title,
+                date: m.date,
+                time: m.time,
+                participants: m.participants || "",
+                description: m.description || "",
+                completed: m.completed === true || m.completed === 'true'
+            }));
+            localStorage.setItem('meetings', JSON.stringify(formattedMeets));
+
+            this.dispatchViewSpecificRenders();
+            if (typeof renderTaskCollection === 'function') renderTaskCollection();
+            if (typeof renderMeetingAgenda === 'function') renderMeetingAgenda();
+            if (typeof refreshDashboardVisuals === 'function') refreshDashboardVisuals();
+        } catch (e) {
+            console.error("Failed downloading operational dataset from Supabase backend layer:", e);
+        }
+    };
+
+    // 2. Wrap Init Core Execution Chain (Safe Mode)
+    const baseInit = WorkspaceCore.init;
+    WorkspaceCore.init = async function() {
+        try {
+            await this.syncWithSupabase();
+        } catch(e) {
+            console.error("Supabase dynamic mapping bypassed due to local initialization errors:", e);
+        }
+        // ALWAYS run base initialization, guaranteeing voice activation executes regardless of backend connectivity
+        baseInit.apply(this, arguments);
+    };
+
+    // 3. Intercept Local Mutations to Update Cloud Layer safely
+    const baseSet = WorkspaceCore.set;
+    WorkspaceCore.set = async function(key, data) {
+        baseSet.apply(this, arguments);
+        
+        if (key === 'tasks' || key === 'meetings') {
+            for (let record of data) {
+                try {
+                    let bodyPayload = { ...record };
+                    if (key === 'tasks' && record.dueDate) {
+                        bodyPayload.dueDate = record.dueDate;
+                    }
+                    
+                    await fetch(`http://localhost:3000/api/${key}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(bodyPayload)
+                    });
+                } catch(err) {
+                    console.error(`Offline delay storing structural entity inside ${key} channel`);
+                }
+            }
+        }
+    };
+
+    // 4. Overwrite Core Network Deletions safely
+    window.deleteTaskRecordSupabase = async function(id) {
+        try {
+            await fetch(`http://localhost:3000/api/tasks/${id}`, { method: 'DELETE' });
+            let tasks = WorkspaceCore.get('tasks') || [];
+            tasks = tasks.filter(t => Number(t.id) !== Number(id));
+            baseSet.apply(WorkspaceCore, ['tasks', tasks]);
+            if (typeof renderTaskCollection === 'function') renderTaskCollection();
+            WorkspaceCore.dispatchViewSpecificRenders();
+        } catch(e) { console.error(e); }
+    };
+
+    window.deleteMeetingRecordSupabase = async function(id) {
+        try {
+            await fetch(`http://localhost:3000/api/meetings/${id}`, { method: 'DELETE' });
+            let meetings = WorkspaceCore.get('meetings') || [];
+            meetings = meetings.filter(m => Number(m.id) !== Number(id));
+            baseSet.apply(WorkspaceCore, ['meetings', meetings]);
+            if (typeof renderMeetingAgenda === 'function') renderMeetingAgenda();
+            WorkspaceCore.dispatchViewSpecificRenders();
+        } catch(e) { console.error(e); }
+    };
+
+    // 5. Automatic Background Offline to Online Syncer
+    window.addEventListener('online', async () => {
+        console.log("🌐 Connection restored! Syncing local items to Supabase cloud layer...");
+        WorkspaceCore.syncWithSupabase();
+    });
+}
+
+// Global Event listener hook definition
 window.addEventListener('DOMContentLoaded', () => WorkspaceCore.init());

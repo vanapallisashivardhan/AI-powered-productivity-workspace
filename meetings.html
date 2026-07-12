@@ -116,15 +116,76 @@
     <div class="voice-status-toast" id="voice-toast"><span id="voice-toast-text"></span></div>
     <button class="voice-fab" id="voice-activation-trigger"><i class="fa-solid fa-microphone"></i></button>
 
+    <script src="main.js"></script>
     <script>
-        // Completely aligned storage layers to work with main.js data maps
+        // Replace renderMeetingAgenda or update it in meetings.html:
+function renderMeetingAgenda() {
+    // Sync using WorkspaceCore wrapper state if initialized
+    const meetings = (typeof WorkspaceCore !== 'undefined') ? (WorkspaceCore.get('meetings') || []) : (MeetingStorage.get() || []);
+    const container = document.getElementById('meetings-agenda-container');
+    if (!container) return;
+
+    if (meetings.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:2rem;">No session agendas scheduled.</div>';
+        return;
+    }
+
+    container.innerHTML = meetings.map(m => `
+        <div class="meeting-card" style="border-left: 4px solid ${m.completed ? 'var(--text-secondary)' : 'var(--accent-color)'}; opacity: ${m.completed ? 0.6 : 1};">
+            <div style="flex:1;">
+                <h4 style="margin:0 0 0.5rem 0; ${m.completed ? 'text-decoration:line-through;' : ''}">${m.title}</h4>
+                <div style="font-size:0.8rem; color:var(--text-secondary);">
+                    <span><i class="fa-solid fa-clock"></i> ${m.date} at ${m.time}</span>
+                </div>
+            </div>
+            <div style="display:flex; gap:0.5rem;">
+                <button onclick="editMeetingRecord(${m.id})" style="background:transparent; border:none; color:var(--text-secondary); cursor:pointer;"><i class="fa-solid fa-pen-to-square"></i></button>
+                <button onclick="toggleMeetingState(${m.id})" style="background:transparent; border:none; color:${m.completed ? '#10b981' : 'var(--text-secondary)'}; cursor:pointer;"><i class="fa-solid ${m.completed ? 'fa-square-check' : 'fa-square'}"></i></button>
+                <button onclick="deleteMeetingRecord(${m.id})" style="background:transparent; border:none; color:#ef4444; cursor:pointer;"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Add this function right below renderMeetingAgenda()
+function editMeetingRecord(id) {
+    let meetings = WorkspaceCore.get('meetings') || [];
+    let recordToUpdate = meetings.find(m => Number(m.id) === Number(id));
+    
+    if (!recordToUpdate) return;
+    
+    const newTitle = prompt("Update Meeting Title:", recordToUpdate.title);
+    if (newTitle === null || newTitle.trim() === "") return;
+    
+    recordToUpdate.title = newTitle.trim();
+    
+    WorkspaceCore.set('meetings', meetings); 
+    renderMeetingAgenda();
+    WorkspaceCore.dispatchViewSpecificRenders();
+}
+        // Aligned storage layers interacting safely with WorkspaceCore state machine pipelines
         const MeetingStorage = {
-            get() { return JSON.parse(localStorage.getItem('meetings')) || []; },
-            set(d) { localStorage.setItem('meetings', JSON.stringify(d)); },
+            get() { 
+                if (typeof WorkspaceCore !== 'undefined') {
+                    return WorkspaceCore.get('meetings') || [];
+                }
+                return JSON.parse(localStorage.getItem('meetings')) || []; 
+            },
+            set(d) { 
+                if (typeof WorkspaceCore !== 'undefined') {
+                    WorkspaceCore.set('meetings', d);
+                } else {
+                    localStorage.setItem('meetings', JSON.stringify(d)); 
+                }
+            },
             log(text) {
-                let logs = JSON.parse(localStorage.getItem('activity')) || [];
-                logs.unshift({log: text, time: new Date().toLocaleString()});
-                localStorage.setItem('activity', JSON.stringify(logs.slice(0, 15)));
+                if (typeof WorkspaceCore !== 'undefined' && typeof WorkspaceCore.logActivity === 'function') {
+                    WorkspaceCore.logActivity(text);
+                } else {
+                    let logs = JSON.parse(localStorage.getItem('activity')) || [];
+                    logs.unshift({log: text, time: new Date().toLocaleString()});
+                    localStorage.setItem('activity', JSON.stringify(logs.slice(0, 15)));
+                }
             }
         };
 
@@ -141,9 +202,9 @@
             }
 
             // Safe chronological sorting
-            meetings.sort((a,b) => new Date((a.date || '') + ' ' + (a.time || '')) - new Date((b.date || '') + ' ' + (b.time || '')));
+            const sortedMeetings = [...meetings].sort((a,b) => new Date((a.date || '') + ' ' + (a.time || '')) - new Date((b.date || '') + ' ' + (b.time || '')));
 
-            wrapper.innerHTML = meetings.map(m => `
+            wrapper.innerHTML = sortedMeetings.map(m => `
                 <div class="meeting-item ${m.completed ? 'completed' : ''}">
                     <div>
                         <strong style="font-size:1.1rem;">${m.title}</strong>
@@ -190,11 +251,18 @@
         }
 
         function deleteMeetingRecord(id) {
-            let m = MeetingStorage.get();
-            m = m.filter(item => item.id !== id);
-            MeetingStorage.set(m);
-            MeetingStorage.log(`Meeting session structural node removed: Signature ${id}`);
-            renderMeetingAgenda();
+            // Check if backend database function hook from main.js is active
+            if (typeof window.deleteMeetingRecordSupabase === 'function') {
+                window.deleteMeetingRecordSupabase(id).then(() => {
+                    renderMeetingAgenda();
+                });
+            } else {
+                let m = MeetingStorage.get();
+                m = m.filter(item => item.id !== id);
+                MeetingStorage.set(m);
+                MeetingStorage.log(`Meeting session structural node removed: Signature ${id}`);
+                renderMeetingAgenda();
+            }
         }
 
         // Attach layout initializer safely behind DOM setup frames
@@ -202,6 +270,5 @@
             renderMeetingAgenda();
         });
     </script>
-    <script src="main.js"></script>
 </body>
 </html>
