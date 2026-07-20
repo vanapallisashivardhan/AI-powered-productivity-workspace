@@ -1,4 +1,4 @@
-       const WorkspaceCore = {
+const WorkspaceCore = {
 
     // 1. Core State Matrix Initializer
     init() {
