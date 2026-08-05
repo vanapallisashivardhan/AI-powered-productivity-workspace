@@ -4,4 +4,4 @@ echo Starting AI Productivity Workspace server...
 npm run dev
 
 run server and databas:-
-node server.js
+npm start
