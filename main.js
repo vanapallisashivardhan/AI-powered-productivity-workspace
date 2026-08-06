@@ -1,35 +1,275 @@
+const TOKEN_KEY = 'auth_token';
+const USER_KEY = 'auth_user';
+
 const WorkspaceCore = {
 
-    // 1. Core State Matrix Initializer
-    init() {
-        // Unify storage keys across all sub-pages completely
-        if (!localStorage.getItem('tasks')) localStorage.setItem('tasks', JSON.stringify([]));
-        if (!localStorage.getItem('meetings')) localStorage.setItem('meetings', JSON.stringify([]));
-        if (!localStorage.getItem('settings')) {
-            localStorage.setItem('settings', JSON.stringify({ theme: 'dark', voiceActive: true }));
-        }
-        if (!localStorage.getItem('activity')) {
-            localStorage.setItem('activity', JSON.stringify([{ log: 'Workspace OS initialized.', time: new Date().toLocaleString() }]));
-        }
-        this.applySystemTheme();
-        this.syncLiveClock();
-        this.dispatchViewSpecificRenders();
-        this.initVoiceAssistant(); // Fire up voice processing listener
+    // 0. Active User Context Manager
+    getAuthToken() {
+        return localStorage.getItem(TOKEN_KEY);
     },
 
-    // 2. LocalStorage Data Access Layer Getter/Setter Pairs
-    get(key) { return JSON.parse(localStorage.getItem(key)); },
-    set(key, data) { localStorage.setItem(key, JSON.stringify(data)); },
+    // Expanded default user structure with Profile Picture & Info
+    getCurrentUser() {
+        const defaultUser = { 
+            userId: 'guest', 
+            name: '324103311056',
+            email: '324103311056@gvpce.ac.in', 
+            role: 'Member',
+            phone: '',
+            location: '',
+            bio: '',
+            avatar: '' 
+        };
+        const savedUser = JSON.parse(localStorage.getItem(USER_KEY));
+        return { ...defaultUser, ...savedUser };
+    },
 
-    // 3. System Auditing Trail Log Mutator
+    // Save updated profile to LocalStorage & MongoDB
+    async updateProfile(newProfileData) {
+        const currentUser = this.getCurrentUser();
+        const updatedUser = { ...currentUser, ...newProfileData };
+        
+        // Save locally
+        localStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
+        this.updateProfileUI();
+        this.renderProfileView();
+
+        // Push update to MongoDB via Express Backend
+        try {
+            const token = this.getAuthToken();
+            if (token) {
+                const response = await fetch('http://localhost:3000/api/profile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(updatedUser)
+                });
+
+                if (response.ok) {
+                    this.logActivity("Updated user profile details in MongoDB.");
+                }
+            }
+        } catch (err) {
+            console.error("MongoDB offline. Saved profile changes to LocalStorage fallback:", err);
+            this.logActivity("Updated user profile details locally.");
+        }
+    },
+
+    getActiveProfileId() {
+        const user = this.getCurrentUser();
+        return user.userId || 'guest';
+    },
+
+    // 1. Core State Matrix Initializer (User-Scoped)
+    init() {
+        if (!this.checkAuthGuard()) return;
+
+        const pid = this.getActiveProfileId();
+
+        if (!localStorage.getItem(`tasks_${pid}`)) localStorage.setItem(`tasks_${pid}`, JSON.stringify([]));
+        if (!localStorage.getItem(`meetings_${pid}`)) localStorage.setItem(`meetings_${pid}`, JSON.stringify([]));
+        if (!localStorage.getItem(`settings_${pid}`)) {
+            localStorage.setItem(`settings_${pid}`, JSON.stringify({ theme: 'dark', voiceActive: true }));
+        }
+        if (!localStorage.getItem(`activity_${pid}`)) {
+            localStorage.setItem(`activity_${pid}`, JSON.stringify([{ log: `Workspace session initialized for user: ${this.getCurrentUser().email}`, time: new Date().toLocaleString() }]));
+        }
+
+        this.applySystemTheme();
+        this.syncLiveClock();
+        this.updateProfileUI();
+        this.dispatchViewSpecificRenders();
+        this.initVoiceAssistant();
+        this.bindProfileFormEvents();
+        this.bindGlobalTaskEvents();
+    },
+
+    checkAuthGuard() {
+        const currentPath = window.location.pathname.split('/').pop();
+        const token = this.getAuthToken();
+
+        if (!token && currentPath !== 'login.html') {
+            window.location.href = 'login.html';
+            return false;
+        } else if (token && currentPath === 'login.html') {
+            window.location.href = 'index.html';
+            return false;
+        }
+        return true;
+    },
+
+    logout() {
+        localStorage.clear();
+        window.location.href = 'login.html';
+    },
+
+    get(key) { 
+        const pid = this.getActiveProfileId();
+        return JSON.parse(localStorage.getItem(`${key}_${pid}`)) || []; 
+    },
+
+    set(key, data) { 
+        const pid = this.getActiveProfileId();
+        localStorage.setItem(`${key}_${pid}`, JSON.stringify(data)); 
+    },
+
+    // Guaranteed task toggle & persistence engine
+    async toggleTaskComplete(taskId) {
+        if (!taskId) return;
+
+        let tasks = this.get('tasks') || [];
+        let updatedTask = null;
+
+        tasks = tasks.map(task => {
+            if (task.id == taskId || task._id == taskId) {
+                updatedTask = { ...task, completed: !task.completed };
+                return updatedTask;
+            }
+            return task;
+        });
+
+        // 1. Immediately update local storage state
+        this.set('tasks', tasks);
+
+        // 2. Refresh UI views
+        this.dispatchViewSpecificRenders();
+
+        // 3. Sync update to MongoDB via PUT API endpoint
+        if (updatedTask) {
+            this.logActivity(`${updatedTask.completed ? 'Completed' : 'Reopened'} task: "${updatedTask.title}"`);
+            
+            try {
+                const targetId = updatedTask._id || updatedTask.id;
+                await fetch(`http://localhost:3000/api/tasks/${targetId}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    },
+                    body: JSON.stringify(updatedTask)
+                });
+            } catch (e) {
+                console.error("Backend offline. Saved task toggle to LocalStorage:", e);
+            }
+        }
+    },
+
+    // Guaranteed meeting toggle engine
+    async toggleMeetingComplete(meetingId) {
+        if (!meetingId) return;
+
+        let meetings = this.get('meetings') || [];
+        let updatedMeeting = null;
+
+        meetings = meetings.map(meeting => {
+            if (meeting.id == meetingId || meeting._id == meetingId) {
+                updatedMeeting = { ...meeting, completed: !meeting.completed };
+                return updatedMeeting;
+            }
+            return meeting;
+        });
+
+        this.set('meetings', meetings);
+        this.dispatchViewSpecificRenders();
+
+        if (updatedMeeting) {
+            this.logActivity(`${updatedMeeting.completed ? 'Completed' : 'Reopened'} meeting: "${updatedMeeting.title}"`);
+            
+            try {
+                const targetId = updatedMeeting._id || updatedMeeting.id;
+                await fetch(`http://localhost:3000/api/meetings/${targetId}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    },
+                    body: JSON.stringify(updatedMeeting)
+                });
+            } catch (e) {
+                console.error("Backend offline. Saved meeting toggle to LocalStorage:", e);
+            }
+        }
+    },
+
+    // Flexible Event Delegation Listener for Checkbox interactions
+    bindGlobalTaskEvents() {
+        document.addEventListener('change', (e) => {
+            const isCheckbox = e.target.type === 'checkbox' || e.target.classList.contains('task-check') || e.target.classList.contains('task-checkbox');
+            if (isCheckbox) {
+                const taskContainer = e.target.closest('[data-id]') || e.target.closest('.task-item') || e.target.closest('.task-card');
+                const taskId = e.target.dataset.id || taskContainer?.dataset?.id;
+                if (taskId) {
+                    this.toggleTaskComplete(taskId);
+                }
+            }
+        });
+    },
+
+    // Updates user details dynamically in Sidebar, Header & Greetings
+    updateProfileUI() {
+        const user = this.getCurrentUser();
+
+        // Greeting banner on Dashboard
+        const greetingBanner = document.getElementById('greeting-banner');
+        if (greetingBanner) {
+            greetingBanner.innerText = `Welcome back, ${user.name || user.email}`;
+        }
+
+        // Sidebar user display bindings
+        const sidebarUserName = document.getElementById('sidebar-user-name');
+        if (sidebarUserName) {
+            sidebarUserName.innerText = user.name || user.email || 'Member';
+        }
+
+        // Sidebar Avatar Image / Icon Handling
+        const sidebarAvatarImg = document.getElementById('sidebar-avatar-img');
+        const sidebarAvatarIcon = document.getElementById('sidebar-avatar-icon');
+        if (sidebarAvatarImg && sidebarAvatarIcon) {
+            if (user.avatar) {
+                sidebarAvatarImg.src = user.avatar;
+                sidebarAvatarImg.style.display = 'block';
+                sidebarAvatarIcon.style.display = 'none';
+            } else {
+                sidebarAvatarImg.style.display = 'none';
+                sidebarAvatarIcon.style.display = 'block';
+            }
+        }
+
+        // Logout Button Handler in Sidebar
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) {
+            logoutBtn.onclick = () => this.logout();
+        }
+
+        // Profile Avatar & Menu in Navbar (if applicable)
+        const profileContainer = document.getElementById('navbar-profile-selector');
+        if (profileContainer) {
+            profileContainer.innerHTML = `
+                <div class="profile-selector-wrapper" style="display:flex; align-items:center; gap: 12px;">
+                    <div style="width: 36px; height: 36px; border-radius: 50%; background-color: #3b82f6; display: flex; align-items: center; justify-content: center; color: #fff; overflow:hidden;">
+                        ${user.avatar ? `<img src="${user.avatar}" style="width:100%; height:100%; object-fit:cover;" />` : `<i class="fa-solid fa-user"></i>`}
+                    </div>
+                    <div style="display:flex; flex-direction:column; align-items:flex-start;">
+                        <span style="font-weight:600; font-size:0.85rem; color:var(--text-primary, #fff);">${user.name || 'User'}</span>
+                        <span style="font-size:0.72rem; color:var(--text-secondary, #a1a1aa);">${user.role || 'Member'}</span>
+                    </div>
+                    <button onclick="WorkspaceCore.logout()" title="Logout" style="background:#ef4444; color:white; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; font-size:0.8rem; margin-left: 6px;">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            `;
+        }
+    },
+
     logActivity(text) {
         let logs = this.get('activity') || [];
         logs.unshift({ log: text, time: new Date().toLocaleString() });
-        this.set('activity', logs.slice(0, 15)); // Keep running log history buffer of 15 items Max
-        this.dispatchViewSpecificRenders(); // Re-render visual components automatically
+        this.set('activity', logs.slice(0, 15));
+        this.dispatchViewSpecificRenders();
     },
 
-    // 4. Productivity Formula Architecture Core Validation Node
     computeProductivityScore() {
         const tasks = this.get('tasks') || [];
         const meetings = this.get('meetings') || [];       
@@ -41,7 +281,6 @@ const WorkspaceCore = {
         return Math.round(((completedTasks + completedMeetings) / totalActiveItems) * 100);
     },
 
-    // 5. Visual Theme Renderer Engine
     applySystemTheme() {
         const settings = this.get('settings') || { theme: 'dark' };
         document.documentElement.setAttribute('data-theme', settings.theme);
@@ -50,7 +289,6 @@ const WorkspaceCore = {
         if (checkbox) checkbox.checked = (settings.theme === 'dark');
     },
 
-    // 6. Live Clock Data Synchronization Mechanism
     syncLiveClock() {
         const clockEl = document.getElementById('live-clock');
         const dateEl = document.getElementById('live-date');
@@ -63,22 +301,99 @@ const WorkspaceCore = {
         if (clockEl || dateEl) { setInterval(tick, 1000); tick(); }
     },
 
-    // 7. View Dispatch Router Module
+    // Dynamic router dispatcher including Profile Page/Section render
     dispatchViewSpecificRenders() {
         const currentPath = window.location.pathname.split('/').pop();
         
-        if (currentPath === 'index.html' || currentPath === '') {
+        if (currentPath === 'index.html' || currentPath === '' || currentPath === 'dashboard.html') {
             this.renderDashboardView();
         } else if (currentPath === 'tasks.html') {
             if (typeof renderTaskCollection === 'function') renderTaskCollection();
         } else if (currentPath === 'meetings.html') {
             if (typeof renderMeetingAgenda === 'function') renderMeetingAgenda();
         } else if (currentPath === 'analysis.html') {
-            if (typeof AnalysisEngine === 'object') AnalysisEngine.computeAndRenderMetrics();
+            if (typeof AnalysisEngine === 'object' && typeof AnalysisEngine.computeAndRenderMetrics === 'function') {
+                AnalysisEngine.computeAndRenderMetrics();
+            }
+        } else if (currentPath === 'profile.html') {
+            this.renderProfileView();
         }
     },
 
-    // 8. View Sub-Renderer - Dashboard Layout Sync Data Pump
+    // Renders and populates data on profile.html if open
+    renderProfileView() {
+        const user = this.getCurrentUser();
+
+        const displayName = document.getElementById('profile-display-name');
+        if (displayName) displayName.innerText = user.name || user.email;
+
+        const displayRole = document.getElementById('profile-role-badge') || document.getElementById('profile-display-role');
+        if (displayRole) displayRole.innerText = user.role || 'Member';
+
+        const nameInput = document.getElementById('full-name') || document.getElementById('profile-name-input');
+        if (nameInput) nameInput.value = user.name || '';
+
+        const emailInput = document.getElementById('email') || document.getElementById('profile-email-input');
+        if (emailInput) emailInput.value = user.email || '';
+
+        const roleInput = document.getElementById('job-title') || document.getElementById('profile-role-input');
+        if (roleInput) roleInput.value = user.role || '';
+
+        const phoneInput = document.getElementById('phone-number') || document.getElementById('profile-phone-input');
+        if (phoneInput) phoneInput.value = user.phone || '';
+
+        const locationInput = document.getElementById('work-location') || document.getElementById('profile-location-input');
+        if (locationInput) locationInput.value = user.location || '';
+
+        const bioInput = document.getElementById('bio') || document.getElementById('profile-bio-input');
+        if (bioInput) bioInput.value = user.bio || '';
+
+        // Handle Main Card Profile Avatar Preview
+        const profileAvatarImg = document.getElementById('profile-avatar-img');
+        const profileAvatarIcon = document.getElementById('profile-avatar-icon');
+        if (profileAvatarImg && profileAvatarIcon) {
+            if (user.avatar) {
+                profileAvatarImg.src = user.avatar;
+                profileAvatarImg.style.display = 'block';
+                profileAvatarIcon.style.display = 'none';
+            } else {
+                profileAvatarImg.style.display = 'none';
+                profileAvatarIcon.style.display = 'block';
+            }
+        }
+    },
+
+    bindProfileFormEvents() {
+        const profileForm = document.getElementById('profile-form');
+        if (profileForm) {
+            profileForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await window.saveUserProfileForm(e);
+            });
+        }
+
+        // Bind Photo Upload Button and File Input Handler
+        const changeAvatarBtn = document.getElementById('change-avatar-btn');
+        const avatarFileInput = document.getElementById('avatar-file-input');
+
+        if (changeAvatarBtn && avatarFileInput) {
+            changeAvatarBtn.addEventListener('click', () => avatarFileInput.click());
+
+            avatarFileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = async (event) => {
+                        const base64Image = event.target.result;
+                        await WorkspaceCore.updateProfile({ avatar: base64Image });
+                        alert("Profile photo updated successfully!");
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+    },
+
     renderDashboardView() {
         const tasks = this.get('tasks') || [];
         const meetings = this.get('meetings') || [];       
@@ -136,7 +451,6 @@ const WorkspaceCore = {
         }
     },
 
-    // 9. Speech Recognition Hardware Core Connector
     initVoiceAssistant() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
@@ -179,6 +493,7 @@ const WorkspaceCore = {
         };
 
         if (voiceBtn) {
+            voiceBtn.onclick = null;
             voiceBtn.addEventListener('click', () => {
                 isEngineExplicitlyOff = !isEngineExplicitlyOff;
                 localStorage.setItem('ws_mic_active', !isEngineExplicitlyOff);
@@ -208,7 +523,6 @@ const WorkspaceCore = {
                 const meetings = this.get('meetings') || [];
                 const currentPath = window.location.pathname.split('/').pop();
 
-                // Advanced metrics calculation layer to allow contextual analysis reading
                 const compTasks = tasks.filter(t => t.completed).length;
                 const pendTasks = tasks.filter(t => !t.completed).length;
                 const compMeetings = meetings.filter(m => m.completed).length;
@@ -220,9 +534,10 @@ const WorkspaceCore = {
                     currentDate: new Date().toISOString().split('T')[0],
                     currentTime: new Date().toLocaleTimeString(),
                     activePageView: currentPath || 'index.html',
+                    activeUserId: this.getActiveProfileId(),
+                    userProfile: this.getCurrentUser(),
                     tasks: tasks,
                     meetings: meetings,
-                    // Injecting analytical summaries explicitly for real-world question interpretation
                     analysisMetricsSummary: {
                         totalTasksCount: tasks.length,
                         completedTasksCount: compTasks,
@@ -237,17 +552,25 @@ const WorkspaceCore = {
 
                 const response = await fetch('http://localhost:3000/api/voice-command', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    },
                     body: JSON.stringify({ 
                         transcript,
                         currentState: currentDataState 
                     })
                 });
 
+                if (response.status === 401) {
+                    this.logout();
+                    return;
+                }
+
                 if (!response.ok) throw new Error("Network layer routing failure.");
                 const data = await response.json();
                 
-                this.executeVoiceIntent(data, speakText);
+                await this.executeVoiceIntent(data, speakText);
 
             } catch (err) {
                 console.error("Voice routing error:", err);
@@ -263,7 +586,6 @@ const WorkspaceCore = {
         }
     },
 
-    // 10. Semantic Intent Execution Router Engine
     async executeVoiceIntent(data, speakCallback) {
         if (!data || data.action === "UNKNOWN") {
             this.logActivity("Command execution failed: Unrecognized intent matching rules.");
@@ -285,42 +607,39 @@ const WorkspaceCore = {
 
             case "CREATE_TASK":
                 if (data.title) {
-                    tasks.unshift({
-                        id: Date.now(),
+                    const newTask = {
+                        id: Date.now().toString(),
                         title: data.title,
                         dueDate: data.dueDate || new Date().toISOString().split('T')[0],
-                        completed: false
-                    });
+                        completed: false,
+                        priority: data.priority || "medium",
+                        category: data.category || "General"
+                    };
+                    tasks.push(newTask);
                     this.set('tasks', tasks);
-                    this.logActivity(`Created task: ${data.title}`);
+                    this.logActivity(`Created task: "${data.title}"`);
+                    await this.saveTaskToBackend(newTask);
                     if (speakCallback) speakCallback(`Added task: ${data.title}`);
                 }
                 break;
 
             case "COMPLETE_TASK":
                 if (data.title) {
-                    let taskFound = false;
-                    tasks = tasks.map(t => {
-                        if (t.title.toLowerCase().includes(data.title.toLowerCase())) {
-                            taskFound = true;
-                            return { ...t, completed: true };
-                        }
-                        return t;
-                    });
-                    if (taskFound) {
-                        this.set('tasks', tasks);
-                        this.logActivity(`Completed task: "${data.title}"`);
-                        if (speakCallback) speakCallback(`Completed task: ${data.title}`);
+                    let matchedTask = tasks.find(t => t.title.toLowerCase().includes(data.title.toLowerCase()));
+                    if (matchedTask) {
+                        await this.toggleTaskComplete(matchedTask.id || matchedTask._id);
+                        if (speakCallback) speakCallback(`Completed task: ${matchedTask.title}`);
                     }
                 }
                 break;
 
             case "DELETE_TASK":
                 if (data.title) {
-                    const originalLength = tasks.length;
-                    tasks = tasks.filter(t => !t.title.toLowerCase().includes(data.title.toLowerCase()));
-                    if (tasks.length < originalLength) {
+                    const matchedTask = tasks.find(t => t.title.toLowerCase().includes(data.title.toLowerCase()));
+                    if (matchedTask) {
+                        tasks = tasks.filter(t => t.id !== matchedTask.id && t._id !== matchedTask._id);
                         this.set('tasks', tasks);
+                        await window.deleteTaskRecordBackend(matchedTask.id || matchedTask._id);
                         this.logActivity(`Deleted task: "${data.title}"`);
                         if (speakCallback) speakCallback(`Deleted task: ${data.title}`);
                     }
@@ -329,33 +648,29 @@ const WorkspaceCore = {
 
             case "CREATE_MEETING":
                 if (data.title) {
-                    meetings.unshift({
-                        id: Date.now(),
+                    const newMeeting = {
+                        id: Date.now().toString(),
                         title: data.title,
                         date: data.date || new Date().toISOString().split('T')[0],
                         time: data.time || "12:00",
+                        participants: data.participants || "",
+                        description: data.description || "",
                         completed: false
-                    });
+                    };
+                    meetings.push(newMeeting);
                     this.set('meetings', meetings);
-                    this.logActivity(`Scheduled session: ${data.title}`);
+                    this.logActivity(`Scheduled meeting: "${data.title}"`);
+                    await this.saveMeetingToBackend(newMeeting);
                     if (speakCallback) speakCallback(`Meeting scheduled: ${data.title}`);
                 }
                 break;
 
             case "COMPLETE_MEETING":
                 if (data.title) {
-                    let meetingFound = false;
-                    meetings = meetings.map(m => {
-                        if (m.title.toLowerCase().includes(data.title.toLowerCase())) {
-                            meetingFound = true;
-                            return { ...m, completed: true };
-                        }
-                        return m;
-                    });
-                    if (meetingFound) {
-                        this.set('meetings', meetings);
-                        this.logActivity(`Completed meeting: "${data.title}"`);
-                        if (speakCallback) speakCallback(`Marked meeting ${data.title} as completed.`);
+                    let matchedMeeting = meetings.find(m => m.title.toLowerCase().includes(data.title.toLowerCase()));
+                    if (matchedMeeting) {
+                        await this.toggleMeetingComplete(matchedMeeting.id || matchedMeeting._id);
+                        if (speakCallback) speakCallback(`Marked meeting ${matchedMeeting.title} as completed.`);
                     }
                 }
                 break;
@@ -364,12 +679,9 @@ const WorkspaceCore = {
                 if (data.title) {
                     const matchedMeeting = meetings.find(m => m.title.toLowerCase().includes(data.title.toLowerCase()));
                     if (matchedMeeting) {
-                        if (typeof window.deleteMeetingRecordSupabase === 'function') {
-                            await window.deleteMeetingRecordSupabase(matchedMeeting.id);
-                        } else {
-                            meetings = meetings.filter(m => m.id !== matchedMeeting.id);
-                            this.set('meetings', meetings);
-                        }
+                        meetings = meetings.filter(m => m.id !== matchedMeeting.id && m._id !== matchedMeeting._id);
+                        this.set('meetings', meetings);
+                        await window.deleteMeetingRecordBackend(matchedMeeting.id || matchedMeeting._id);
                         this.logActivity(`Deleted meeting: "${data.title}"`);
                         if (speakCallback) speakCallback(`Deleted meeting ${data.title}.`);
                     }
@@ -407,116 +719,183 @@ const WorkspaceCore = {
         }
         
         this.dispatchViewSpecificRenders();
-        if (typeof renderTaskCollection === 'function') renderTaskCollection();
-        if (typeof renderMeetingAgenda === 'function') renderMeetingAgenda();
-        if (typeof refreshDashboardVisuals === 'function') refreshDashboardVisuals();
+    },
+
+    async saveTaskToBackend(task) {
+        try {
+            await fetch('http://localhost:3000/api/tasks', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.getAuthToken()}`
+                },
+                body: JSON.stringify(task)
+            });
+        } catch(e) { 
+            console.error('Error saving task to backend (retaining local state):', e); 
+        }
+    },
+
+    async saveMeetingToBackend(meeting) {
+        try {
+            await fetch('http://localhost:3000/api/meetings', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.getAuthToken()}`
+                },
+                body: JSON.stringify(meeting)
+            });
+        } catch(e) { 
+            console.error('Error saving meeting to backend (retaining local state):', e); 
+        }
     }
 };
 
-// SUPABASE SYNCHRONIZATION OVERRIDES FOR WORKSPACE (REFINED)
+// Global Execution Handles
+window.toggleTaskComplete = (id) => WorkspaceCore.toggleTaskComplete(id);
+window.toggleMeetingComplete = (id) => WorkspaceCore.toggleMeetingComplete(id);
+
+// MONGODB API SYNCHRONIZATION OVERRIDES FOR WORKSPACE (JWT SECURED)
 if (typeof WorkspaceCore !== 'undefined') {
     
-    // 1. Sync Down from Cloud Database Engine Safely Bypass Interceptor Loop
-    WorkspaceCore.syncWithSupabase = async function() {
+    WorkspaceCore.syncWithMongoDB = async function() {
+        const token = this.getAuthToken();
+        if (!token) return;
+
         try {
-            const taskRes = await fetch('http://localhost:3000/api/tasks');
-            const cloudTasks = await taskRes.json();           
-            const formattedTasks = cloudTasks.map(t => ({
-                id: Number(t.id),
-                title: t.title,
-                priority: t.priority || "medium",
-                category: t.category || "General",
-                dueDate: t.due_date || t.dueDate || "",
-                completed: t.completed === true || t.completed === 'true'
-            }));
-            localStorage.setItem('tasks', JSON.stringify(formattedTasks));
+            const headers = { 'Authorization': `Bearer ${token}` };
 
-            const meetRes = await fetch('http://localhost:3000/api/meetings');
-            const cloudMeets = await meetRes.json();          
-            const formattedMeets = cloudMeets.map(m => ({
-                id: Number(m.id),
-                title: m.title,
-                date: m.date,
-                time: m.time,
-                participants: m.participants || "",
-                description: m.description || "",
-                completed: m.completed === true || m.completed === 'true'
-            }));
-            localStorage.setItem('meetings', JSON.stringify(formattedMeets));
-            this.dispatchViewSpecificRenders();
-            if (typeof renderTaskCollection === 'function') renderTaskCollection();
-            if (typeof renderMeetingAgenda === 'function') renderMeetingAgenda();
-            if (typeof refreshDashboardVisuals === 'function') refreshDashboardVisuals();
-        } catch (e) {
-            console.error("Failed downloading operational dataset from Supabase backend layer:", e);
-        }
-    };
-
-    // 2. Wrap Init Core Execution Chain (Safe Connectivity Injection Bypass)
-    const baseInit = WorkspaceCore.init;
-    WorkspaceCore.init = async function() {
-        try {
-            await this.syncWithSupabase();
-        } catch(e) {
-            console.error("Supabase dynamic mapping bypassed due to local initialization errors:", e);
-        }
-        baseInit.apply(this, arguments);
-    };
-
-    // 3. Intercept Local Mutations to Update Cloud Layer safely
-    const baseSet = WorkspaceCore.set;
-    WorkspaceCore.set = async function(key, data) {
-        baseSet.apply(this, arguments);
-        
-        if (key === 'tasks' || key === 'meetings') {
-            for (let record of data) {
-                try {
-                    let bodyPayload = { ...record };
-                    if (key === 'tasks' && record.dueDate) {
-                        bodyPayload.dueDate = record.dueDate;
-                    }
+            // 1. Sync Tasks Down from MongoDB
+            const taskRes = await fetch('http://localhost:3000/api/tasks', { headers });
+            if (taskRes.status === 401) { this.logout(); return; }
+            
+            if (taskRes.ok) {
+                const cloudTasks = await taskRes.json();           
+                if (Array.isArray(cloudTasks) && cloudTasks.length > 0) {
+                    const formattedTasks = cloudTasks.map(t => ({
+                        id: t._id || t.id,
+                        title: t.title,
+                        priority: t.priority || "medium",
+                        category: t.category || "General",
+                        dueDate: t.dueDate || t.due_date || "",
+                        completed: t.completed === true || t.completed === 'true'
+                    }));
                     
-                    await fetch(`http://localhost:3000/api/${key}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(bodyPayload)
+                    // Merge local completion states if already toggled locally
+                    const localTasks = this.get('tasks') || [];
+                    const mergedTasks = formattedTasks.map(cloudTask => {
+                        const localMatch = localTasks.find(l => l.id == cloudTask.id || l._id == cloudTask.id);
+                        if (localMatch && localMatch.completed !== cloudTask.completed) {
+                            return { ...cloudTask, completed: localMatch.completed };
+                        }
+                        return cloudTask;
                     });
-                } catch(err) {
-                    console.error(`Offline delay storing structural entity inside ${key} channel`);
+
+                    this.set('tasks', mergedTasks);
                 }
             }
+
+            // 2. Sync Meetings Down from MongoDB
+            const meetRes = await fetch('http://localhost:3000/api/meetings', { headers });
+            if (meetRes.status === 401) { this.logout(); return; }
+
+            if (meetRes.ok) {
+                const cloudMeets = await meetRes.json();          
+                if (Array.isArray(cloudMeets) && cloudMeets.length > 0) {
+                    const formattedMeets = cloudMeets.map(m => ({
+                        id: m._id || m.id,
+                        title: m.title,
+                        date: m.date,
+                        time: m.time,
+                        participants: m.participants || "",
+                        description: m.description || "",
+                        completed: m.completed === true || m.completed === 'true'
+                    }));
+
+                    const localMeets = this.get('meetings') || [];
+                    const mergedMeets = formattedMeets.map(cloudMeet => {
+                        const localMatch = localMeets.find(l => l.id == cloudMeet.id || l._id == cloudMeet.id);
+                        if (localMatch && localMatch.completed !== cloudMeet.completed) {
+                            return { ...cloudMeet, completed: localMatch.completed };
+                        }
+                        return cloudMeet;
+                    });
+
+                    this.set('meetings', mergedMeets);
+                }
+            }
+
+            // 3. Sync User Profile Down from MongoDB
+            const profileRes = await fetch('http://localhost:3000/api/profile', { headers });
+            if (profileRes.status === 401) { this.logout(); return; }
+
+            if (profileRes.ok) {
+                const cloudProfile = await profileRes.json();
+                if (cloudProfile && (cloudProfile.userId || cloudProfile.email || cloudProfile._id)) {
+                    const currentLocal = this.getCurrentUser();
+                    const mergedProfile = { ...currentLocal, ...cloudProfile };
+                    localStorage.setItem(USER_KEY, JSON.stringify(mergedProfile));
+                    this.updateProfileUI();
+                    this.renderProfileView();
+                }
+            }
+
+            this.dispatchViewSpecificRenders();
+        } catch (e) {
+            console.error("MongoDB backend offline or unreachable. Retaining local operational state:", e);
         }
     };
 
-    // 4. Overwrite Core Network Deletions safely
-    window.deleteTaskRecordSupabase = async function(id) {
+    const baseInit = WorkspaceCore.init;
+    WorkspaceCore.init = async function() {
+        baseInit.apply(this, arguments);
         try {
-            await fetch(`http://localhost:3000/api/tasks/${id}`, { method: 'DELETE' });
-            let tasks = WorkspaceCore.get('tasks') || [];
-            tasks = tasks.filter(t => Number(t.id) !== Number(id));
-            baseSet.apply(WorkspaceCore, ['tasks', tasks]);
-            if (typeof renderTaskCollection === 'function') renderTaskCollection();
-            WorkspaceCore.dispatchViewSpecificRenders();
+            await this.syncWithMongoDB();
+        } catch(e) {
+            console.error("Cloud dynamic mapping bypassed due to initialization errors:", e);
+        }
+    };
+
+    window.deleteTaskRecordBackend = async function(id) {
+        if (!id) return;
+        try {
+            await fetch(`http://localhost:3000/api/tasks/${id}`, { 
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${WorkspaceCore.getAuthToken()}` }
+            });
         } catch(e) { console.error(e); }
     };
 
-    window.deleteMeetingRecordSupabase = async function(id) {
+    window.deleteMeetingRecordBackend = async function(id) {
+        if (!id) return;
         try {
-            await fetch(`http://localhost:3000/api/meetings/${id}`, { method: 'DELETE' });
-            let meetings = WorkspaceCore.get('meetings') || [];
-            meetings = meetings.filter(m => Number(m.id) !== Number(id));
-            baseSet.apply(WorkspaceCore, ['meetings', meetings]);
-            if (typeof renderMeetingAgenda === 'function') renderMeetingAgenda();
-            WorkspaceCore.dispatchViewSpecificRenders();
+            await fetch(`http://localhost:3000/api/meetings/${id}`, { 
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${WorkspaceCore.getAuthToken()}` }
+            });
         } catch(e) { console.error(e); }
     };
-
-    // 5. Automatic Background Offline to Online Syncer
-    window.addEventListener('online', async () => {
-        console.log("🌐 Connection restored! Syncing local items to Supabase cloud layer...");
-        WorkspaceCore.syncWithSupabase();
-    });
 }
 
-// Fire global application lifecycle context setup safely
-window.addEventListener('DOMContentLoaded', () => WorkspaceCore.init());
+// Save profile form submission helper
+window.saveUserProfileForm = async function(event) {
+    if (event) event.preventDefault();
+
+    const updatedData = {
+        name: document.getElementById('full-name')?.value || document.getElementById('profile-name-input')?.value,
+        email: document.getElementById('email')?.value || document.getElementById('profile-email-input')?.value,
+        role: document.getElementById('job-title')?.value || document.getElementById('profile-role-input')?.value,
+        phone: document.getElementById('phone-number')?.value || document.getElementById('profile-phone-input')?.value,
+        location: document.getElementById('work-location')?.value || document.getElementById('profile-location-input')?.value,
+        bio: document.getElementById('bio')?.value || document.getElementById('profile-bio-input')?.value
+    };
+
+    await WorkspaceCore.updateProfile(updatedData);
+    alert("Profile details saved successfully!");
+};
+
+// Application Bootstrapper
+document.addEventListener('DOMContentLoaded', () => {
+    WorkspaceCore.init();
+});

@@ -61,16 +61,68 @@
 </head>
 <body>
 
-    <nav class="sidebar">
-        <div class="sidebar-brand"><i class="fa-solid fa-brain"></i><span>Workspace Pro</span></div>
-        <ul class="sidebar-menu">
-            <li class="sidebar-item"><a href="index.html"><i class="fa-solid fa-chart-pie"></i><span>Dashboard</span></a></li>
-            <li class="sidebar-item"><a href="tasks.html"><i class="fa-solid fa-list-check"></i><span>Tasks</span></a></li>
-            <li class="sidebar-item active"><a href="meetings.html"><i class="fa-solid fa-video"></i><span>Meetings</span></a></li>
-            <li class="sidebar-item"><a href="analysis.html"><i class="fa-solid fa-chart-line"></i><span>Analysis</span></a></li>
-            <li class="sidebar-item"><a href="settings.html"><i class="fa-solid fa-gear"></i><span>Settings</span></a></li>
-        </ul>
-    </nav>
+<nav class="sidebar">
+    <div class="sidebar-brand">
+        <i class="fa-solid fa-brain"></i>
+        <span>Workspace Pro</span>
+    </div>
+
+    <ul class="sidebar-menu">
+        <li class="sidebar-item">
+            <a href="index.html">
+                <i class="fa-solid fa-chart-pie"></i>
+                <span>Dashboard</span>
+            </a>
+        </li>
+        <li class="sidebar-item">
+            <a href="tasks.html">
+                <i class="fa-solid fa-list-check"></i>
+                <span>Tasks</span>
+            </a>
+        </li>
+        <li class="sidebar-item">
+            <a href="meetings.html">
+                <i class="fa-solid fa-video"></i>
+                <span>Meetings</span>
+            </a>
+        </li>
+        <li class="sidebar-item">
+            <a href="analysis.html">
+                <i class="fa-solid fa-chart-line"></i>
+                <span>Analysis</span>
+            </a>
+        </li>
+        <li class="sidebar-item">
+            <a href="settings.html">
+                <i class="fa-solid fa-gear"></i>
+                <span>Settings</span>
+            </a>
+        </li>
+        <li class="sidebar-item">
+            <a href="profile.html">
+                <i class="fa-solid fa-user-gear"></i>
+                <span>Profile</span>
+            </a>
+        </li>
+    </ul>
+
+    <!-- Quick Profile Footer -->
+    <div class="sidebar-footer" style="padding: 1rem; border-top: 1px solid rgba(255,255,255,0.1); margin-top: auto; display: flex; align-items: center; justify-content: space-between;">
+        <a href="profile.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none;">
+            <div id="sidebar-avatar-wrapper" style="width: 36px; height: 36px; border-radius: 50%; overflow: hidden; background-color: #3b82f6; display: flex; align-items: center; justify-content: center; color: #fff;">
+                <i class="fa-solid fa-user" id="sidebar-avatar-icon"></i>
+                <img id="sidebar-avatar-img" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;" />
+            </div>
+            <div style="display: flex; flex-direction: column;">
+                <span id="sidebar-user-name" style="font-weight: 600; color: #fff; font-size: 0.85rem;">Member</span>
+                <span style="font-size: 0.75rem; color: #94a3b8;">View Profile</span>
+            </div>
+        </a>
+        <button id="logout-btn" title="Logout" style="background: transparent; border: none; color: #ef4444; cursor: pointer; font-size: 1.1rem;">
+            <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+    </div>
+</nav>
 
     <main class="main-content">
         <header class="navbar">
@@ -118,52 +170,7 @@
 
     <script src="main.js"></script>
     <script>
-        // Replace renderMeetingAgenda or update it in meetings.html:
-function renderMeetingAgenda() {
-    // Sync using WorkspaceCore wrapper state if initialized
-    const meetings = (typeof WorkspaceCore !== 'undefined') ? (WorkspaceCore.get('meetings') || []) : (MeetingStorage.get() || []);
-    const container = document.getElementById('meetings-agenda-container');
-    if (!container) return;
-
-    if (meetings.length === 0) {
-        container.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:2rem;">No session agendas scheduled.</div>';
-        return;
-    }
-
-    container.innerHTML = meetings.map(m => `
-        <div class="meeting-card" style="border-left: 4px solid ${m.completed ? 'var(--text-secondary)' : 'var(--accent-color)'}; opacity: ${m.completed ? 0.6 : 1};">
-            <div style="flex:1;">
-                <h4 style="margin:0 0 0.5rem 0; ${m.completed ? 'text-decoration:line-through;' : ''}">${m.title}</h4>
-                <div style="font-size:0.8rem; color:var(--text-secondary);">
-                    <span><i class="fa-solid fa-clock"></i> ${m.date} at ${m.time}</span>
-                </div>
-            </div>
-            <div style="display:flex; gap:0.5rem;">
-                <button onclick="editMeetingRecord(${m.id})" style="background:transparent; border:none; color:var(--text-secondary); cursor:pointer;"><i class="fa-solid fa-pen-to-square"></i></button>
-                <button onclick="toggleMeetingState(${m.id})" style="background:transparent; border:none; color:${m.completed ? '#10b981' : 'var(--text-secondary)'}; cursor:pointer;"><i class="fa-solid ${m.completed ? 'fa-square-check' : 'fa-square'}"></i></button>
-                <button onclick="deleteMeetingRecord(${m.id})" style="background:transparent; border:none; color:#ef4444; cursor:pointer;"><i class="fa-solid fa-trash-can"></i></button>
-            </div>
-        </div>
-    `).join('');
-}
-
-// Add this function right below renderMeetingAgenda()
-function editMeetingRecord(id) {
-    let meetings = WorkspaceCore.get('meetings') || [];
-    let recordToUpdate = meetings.find(m => Number(m.id) === Number(id));
-    
-    if (!recordToUpdate) return;
-    
-    const newTitle = prompt("Update Meeting Title:", recordToUpdate.title);
-    if (newTitle === null || newTitle.trim() === "") return;
-    
-    recordToUpdate.title = newTitle.trim();
-    
-    WorkspaceCore.set('meetings', meetings); 
-    renderMeetingAgenda();
-    WorkspaceCore.dispatchViewSpecificRenders();
-}
-        // Aligned storage layers interacting safely with WorkspaceCore state machine pipelines
+        // Storage abstraction layer interfacing with WorkspaceCore state engine
         const MeetingStorage = {
             get() { 
                 if (typeof WorkspaceCore !== 'undefined') {
@@ -189,7 +196,7 @@ function editMeetingRecord(id) {
             }
         };
 
-        // Unified rendering window callback to avoid state destruction conflicts
+        // Render current meeting sessions agenda
         function renderMeetingAgenda() {
             const meetings = MeetingStorage.get();
             const wrapper = document.getElementById('meetings-list-render-zone');
@@ -207,18 +214,37 @@ function editMeetingRecord(id) {
             wrapper.innerHTML = sortedMeetings.map(m => `
                 <div class="meeting-item ${m.completed ? 'completed' : ''}">
                     <div>
-                        <strong style="font-size:1.1rem;">${m.title}</strong>
+                        <strong style="font-size:1.1rem; ${m.completed ? 'text-decoration:line-through;' : ''}">${m.title}</strong>
                         <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:6px;">
                             <i class="fa-solid fa-calendar"></i> ${m.date || 'No Date'} at ${m.time || 'No Time'} ${m.participants ? `| <strong>Roster:</strong> ${m.participants}` : ''}
                         </div>
                         <p style="font-size:0.9rem; margin-top:8px; color:var(--text-primary);">${m.description || 'No descriptive agenda provided.'}</p>
                     </div>
                     <div style="display:flex; gap:6px; align-items:center;">
+                        <button class="btn-submit" style="padding:6px 12px; background:var(--accent-color); width:auto;" onclick="editMeetingRecord(${m.id})"><i class="fa-solid fa-pen"></i></button>
                         <button class="btn-submit" style="padding:6px 12px; background:#10b981; width:auto;" onclick="toggleMeetingState(${m.id})"><i class="fa-solid fa-check"></i></button>
                         <button class="btn-submit" style="padding:6px 12px; background:#ef4444; width:auto;" onclick="deleteMeetingRecord(${m.id})"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
             `).join('');
+        }
+
+        function editMeetingRecord(id) {
+            let meetings = MeetingStorage.get();
+            let recordToUpdate = meetings.find(m => String(m.id) === String(id));
+            
+            if (!recordToUpdate) return;
+            
+            const newTitle = prompt("Update Meeting Title:", recordToUpdate.title);
+            if (newTitle === null || newTitle.trim() === "") return;
+            
+            recordToUpdate.title = newTitle.trim();
+            
+            MeetingStorage.set(meetings); 
+            renderMeetingAgenda();
+            if (typeof WorkspaceCore !== 'undefined' && typeof WorkspaceCore.dispatchViewSpecificRenders === 'function') {
+                WorkspaceCore.dispatchViewSpecificRenders();
+            }
         }
 
         function saveMeetingObject(e) {
@@ -237,7 +263,6 @@ function editMeetingRecord(id) {
             document.getElementById('meeting-form').reset();
             renderMeetingAgenda();
             
-            // Sync with dashboard graphics tracking loops if WorkspaceCore engine initialization exists
             if (typeof WorkspaceCore !== 'undefined' && typeof WorkspaceCore.renderDashboardView === 'function') {
                 WorkspaceCore.renderDashboardView();
             }
@@ -245,27 +270,26 @@ function editMeetingRecord(id) {
 
         function toggleMeetingState(id) {
             let m = MeetingStorage.get();
-            m = m.map(item => item.id === id ? {...item, completed: !item.completed} : item);
+            m = m.map(item => String(item.id) === String(id) ? {...item, completed: !item.completed} : item);
             MeetingStorage.set(m);
             renderMeetingAgenda();
         }
 
         function deleteMeetingRecord(id) {
-            // Check if backend database function hook from main.js is active
             if (typeof window.deleteMeetingRecordSupabase === 'function') {
                 window.deleteMeetingRecordSupabase(id).then(() => {
                     renderMeetingAgenda();
                 });
             } else {
                 let m = MeetingStorage.get();
-                m = m.filter(item => item.id !== id);
+                m = m.filter(item => String(item.id) !== String(id));
                 MeetingStorage.set(m);
                 MeetingStorage.log(`Meeting session structural node removed: Signature ${id}`);
                 renderMeetingAgenda();
             }
         }
 
-        // Attach layout initializer safely behind DOM setup frames
+        // Attach layout initializer on page load
         window.addEventListener('DOMContentLoaded', () => {
             renderMeetingAgenda();
         });

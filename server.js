@@ -5,11 +5,18 @@ import express from 'express';
 import cors from 'cors';
 import OpenAI from 'openai';
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+
+// Expanded JSON limit to support image/avatar base64 string uploads safely
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static('.'));
+
+const JWT_SECRET = process.env.JWT_SECRET || 'productivity_workspace_jwt_secret_key_2026';
 
 // --- 1. MongoDB Connection ---
 const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || "";
@@ -23,8 +30,29 @@ if (mongoUri) {
 }
 
 // --- 2. Mongoose Schemas & Models ---
+
+// User Schema for Auth
+const userSchema = new mongoose.Schema({
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    password: { type: String, required: true }
+}, { timestamps: true });
+
+// User Profile Schema bound to User
+const userProfileSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+    name: { type: String, default: "" },
+    email: { type: String, default: "" },
+    role: { type: String, default: "" },
+    phone: { type: String, default: "" },
+    location: { type: String, default: "" },
+    bio: { type: String, default: "" },
+    avatar: { type: String, default: "" } // Base64 image payload or public URL string
+}, { timestamps: true });
+
+// Task Schema bound to User
 const taskSchema = new mongoose.Schema({
-    id: { type: Number, required: true, unique: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    id: { type: Number, required: true },
     title: { type: String, default: "Untitled Task" },
     priority: { type: String, default: "medium" },
     category: { type: String, default: "General" },
@@ -32,8 +60,13 @@ const taskSchema = new mongoose.Schema({
     completed: { type: Boolean, default: false }
 }, { timestamps: true });
 
+// Scoped uniqueness per user (User A & User B can both have an item with id: 1)
+taskSchema.index({ userId: 1, id: 1 }, { unique: true });
+
+// Meeting Schema bound to User
 const meetingSchema = new mongoose.Schema({
-    id: { type: Number, required: true, unique: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    id: { type: Number, required: true },
     title: { type: String, default: "Untitled Meeting" },
     date: { type: String },
     time: { type: String, default: "12:00" },
@@ -42,10 +75,184 @@ const meetingSchema = new mongoose.Schema({
     completed: { type: Boolean, default: false }
 }, { timestamps: true });
 
+// Scoped uniqueness per user
+meetingSchema.index({ userId: 1, id: 1 }, { unique: true });
+
+const User = mongoose.model('User', userSchema);
+const UserProfile = mongoose.model('UserProfile', userProfileSchema);
 const Task = mongoose.model('Task', taskSchema);
 const Meeting = mongoose.model('Meeting', meetingSchema);
 
-// --- 3. OpenRouter / OpenAI Config ---
+// --- 3. JWT Authentication Middleware ---
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ error: "Access Denied: Missing access token" });
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, decodedUser) => {
+        if (err) {
+            return res.status(403).json({ error: "Access Denied: Invalid or expired token" });
+        }
+        req.user = decodedUser;
+        next();
+    });
+};
+
+// --- 4. User Authentication Routes ---
+
+// REGISTER ROUTE
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ error: "Email and password are required." });
+        }
+
+        const existingUser = await User.findOne({ email: email.toLowerCase() });
+        if (existingUser) {
+            return res.status(400).json({ error: "An account with this email already exists." });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = await User.create({ email, password: hashedPassword });
+
+        // Initialize empty baseline profile document for new registered user
+        await UserProfile.create({ 
+            userId: newUser._id, 
+            email: newUser.email,
+            name: newUser.email.split('@')[0]
+        });
+
+        const token = jwt.sign({ userId: newUser._id, email: newUser.email }, JWT_SECRET, { expiresIn: '7d' });
+
+        res.status(201).json({
+            token,
+            userId: newUser._id,
+            email: newUser.email
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// LOGIN ROUTE
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ error: "Email and password are required." });
+        }
+
+        const user = await User.findOne({ email: email.toLowerCase() });
+        if (!user) {
+            return res.status(400).json({ error: "Invalid credentials." });
+        }
+
+        const validPassword = await bcrypt.compare(password, user.password);
+        if (!validPassword) {
+            return res.status(400).json({ error: "Invalid credentials." });
+        }
+
+        const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+
+        res.json({
+            token,
+            userId: user._id,
+            email: user.email
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- 5. User Profile MongoDB Endpoints (User Scoped) ---
+
+// GET Profile Details
+app.get('/api/profile', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        let profile = await UserProfile.findOne({ userId }).lean();
+
+        if (!profile) {
+            // Return baseline profile object if none exists
+            profile = {
+                userId,
+                email: req.user.email || "",
+                name: req.user.email ? req.user.email.split('@')[0] : "",
+                role: "",
+                phone: "",
+                location: "",
+                bio: "",
+                avatar: ""
+            };
+        }
+
+        res.json(profile);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST Save/Update Profile Details
+app.post('/api/profile', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { name, fullName, email, role, jobTitle, phone, phoneNumber, location, workLocation, bio, avatar } = req.body;
+
+        const updatedProfile = await UserProfile.findOneAndUpdate(
+            { userId },
+            {
+                userId,
+                name: fullName || name || "",
+                email: email || req.user.email,
+                role: jobTitle || role || "",
+                phone: phoneNumber || phone || "",
+                location: workLocation || location || "",
+                bio: bio || "",
+                ...(avatar && { avatar }) // Only update avatar field if passed
+            },
+            { upsert: true, new: true }
+        );
+
+        res.json({ success: true, profile: updatedProfile });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// PUT /api/user/profile - Dedicated endpoint for MongoDB profile updates
+app.put('/api/user/profile', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { fullName, name, email, jobTitle, role, phoneNumber, phone, workLocation, location, bio, avatar } = req.body;
+
+        const profileData = {
+            userId,
+            name: fullName || name || "",
+            email: email || req.user.email,
+            role: jobTitle || role || "",
+            phone: phoneNumber || phone || "",
+            location: workLocation || location || "",
+            bio: bio || "",
+            ...(avatar && { avatar })
+        };
+
+        const updatedProfile = await UserProfile.findOneAndUpdate(
+            { userId },
+            profileData,
+            { upsert: true, new: true, runValidators: true }
+        );
+
+        res.status(200).json({ success: true, message: 'Profile updated in MongoDB successfully!', profile: updatedProfile });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Database error', error: error.message });
+    }
+});
+
+// --- 6. OpenRouter / OpenAI Config & Voice Engine ---
 const openai = new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
     apiKey: process.env.OPENROUTER_API_KEY || ""
@@ -71,7 +278,7 @@ const workspaceTools = [
                     },
                     targetPage: {
                         type: "string",
-                        enum: ["index.html", "tasks.html", "meetings.html", "analysis.html", "settings.html"],
+                        enum: ["index.html", "tasks.html", "meetings.html", "analysis.html", "profile.html", "settings.html"],
                         description: "The targeted page filename required if action type is NAVIGATE."
                     },
                     title: {
@@ -110,14 +317,13 @@ const workspaceTools = [
     }
 ];
 
-// Helper to sanitize boolean values from dynamic payloads
 function filterStringToBoolean(val) {
     if (typeof val === 'boolean') return val;
     return val === 'true';
 }
 
-// --- 4. CORE AI VOICE PROCESSING ENDPOINT ---
-app.post('/api/voice-command', async (req, res) => {
+// AI Voice Processing Route (Authenticated)
+app.post('/api/voice-command', authenticateToken, async (req, res) => {
     const { transcript, currentState } = req.body;
 
     if (!transcript) {
@@ -161,11 +367,11 @@ app.post('/api/voice-command', async (req, res) => {
     }
 });
 
-// --- 5. MONGODB DATA ENDPOINTS (TASKS) ---
+// --- 7. MONGODB TASKS ENDPOINTS (User Scoped) ---
 
-app.get('/api/tasks', async (req, res) => {
+app.get('/api/tasks', authenticateToken, async (req, res) => {
     try {
-        const tasks = await Task.find().sort({ id: -1 }).lean();
+        const tasks = await Task.find({ userId: req.user.userId }).sort({ id: -1 }).lean();
         const formattedTasks = tasks.map(t => ({
             id: t.id,
             title: t.title,
@@ -181,12 +387,13 @@ app.get('/api/tasks', async (req, res) => {
     }
 });
 
-app.post('/api/tasks', async (req, res) => {
+app.post('/api/tasks', authenticateToken, async (req, res) => {
     const task = req.body;
     if (!task.id) return res.status(400).json({ error: "Missing identity index signature" });
 
     try {
         const payload = {
+            userId: req.user.userId,
             id: parseInt(task.id),
             title: task.title || "Untitled Task",
             priority: task.priority || "medium",
@@ -195,27 +402,31 @@ app.post('/api/tasks', async (req, res) => {
             completed: filterStringToBoolean(task.completed)
         };
 
-        await Task.findOneAndUpdate({ id: parseInt(task.id) }, payload, { upsert: true, new: true });
+        await Task.findOneAndUpdate(
+            { userId: req.user.userId, id: parseInt(task.id) }, 
+            payload, 
+            { upsert: true, new: true }
+        );
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-app.delete('/api/tasks/:id', async (req, res) => {
+app.delete('/api/tasks/:id', authenticateToken, async (req, res) => {
     try {
-        await Task.deleteOne({ id: parseInt(req.params.id) });
+        await Task.deleteOne({ userId: req.user.userId, id: parseInt(req.params.id) });
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// --- 6. MONGODB DATA ENDPOINTS (MEETINGS) ---
+// --- 8. MONGODB MEETINGS ENDPOINTS (User Scoped) ---
 
-app.get('/api/meetings', async (req, res) => {
+app.get('/api/meetings', authenticateToken, async (req, res) => {
     try {
-        const meetings = await Meeting.find().sort({ id: -1 }).lean();
+        const meetings = await Meeting.find({ userId: req.user.userId }).sort({ id: -1 }).lean();
         const formattedMeetings = meetings.map(m => ({
             id: m.id,
             title: m.title,
@@ -231,12 +442,13 @@ app.get('/api/meetings', async (req, res) => {
     }
 });
 
-app.post('/api/meetings', async (req, res) => {
+app.post('/api/meetings', authenticateToken, async (req, res) => {
     const meeting = req.body;
     if (!meeting.id) return res.status(400).json({ error: "Missing identity index signature" });
 
     try {
         const payload = {
+            userId: req.user.userId,
             id: parseInt(meeting.id),
             title: meeting.title || "Untitled Meeting",
             date: meeting.date || new Date().toISOString().split('T')[0],
@@ -246,23 +458,27 @@ app.post('/api/meetings', async (req, res) => {
             completed: filterStringToBoolean(meeting.completed)
         };
 
-        await Meeting.findOneAndUpdate({ id: parseInt(meeting.id) }, payload, { upsert: true, new: true });
+        await Meeting.findOneAndUpdate(
+            { userId: req.user.userId, id: parseInt(meeting.id) }, 
+            payload, 
+            { upsert: true, new: true }
+        );
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-app.delete('/api/meetings/:id', async (req, res) => {
+app.delete('/api/meetings/:id', authenticateToken, async (req, res) => {
     try {
-        await Meeting.deleteOne({ id: parseInt(req.params.id) });
+        await Meeting.deleteOne({ userId: req.user.userId, id: parseInt(req.params.id) });
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// --- 7. START EXPRESS SERVER ---
+// --- 9. START EXPRESS SERVER ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 Productivity Workspace Backend fully live at http://localhost:${PORT}`);
