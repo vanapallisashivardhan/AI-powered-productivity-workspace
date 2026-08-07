@@ -8,19 +8,29 @@ const WorkspaceCore = {
         return localStorage.getItem(TOKEN_KEY);
     },
 
-    // Expanded default user structure with Profile Picture & Info
+    // Default user structure with dynamic fallback derived from saved credentials
     getCurrentUser() {
+        const savedUser = JSON.parse(localStorage.getItem(USER_KEY)) || {};
+        
+        // Dynamic name fallback if none explicitly defined in auth context
+        let fallbackName = 'Member';
+        if (savedUser.name) {
+            fallbackName = savedUser.name;
+        } else if (savedUser.email) {
+            fallbackName = savedUser.email.split('@')[0];
+        }
+
         const defaultUser = { 
             userId: 'guest', 
-            name: '324103311056',
-            email: '324103311056@gvpce.ac.in', 
+            name: fallbackName,
+            email: 'member@workspace.local', 
             role: 'Member',
             phone: '',
             location: '',
             bio: '',
             avatar: '' 
         };
-        const savedUser = JSON.parse(localStorage.getItem(USER_KEY));
+
         return { ...defaultUser, ...savedUser };
     },
 
@@ -113,6 +123,42 @@ const WorkspaceCore = {
     set(key, data) { 
         const pid = this.getActiveProfileId();
         localStorage.setItem(`${key}_${pid}`, JSON.stringify(data)); 
+    },
+
+    // Helper functions for MongoDB Task backend calls
+    async saveTaskToBackend(task) {
+        try {
+            const token = this.getAuthToken();
+            if (!token) return;
+            await fetch('http://localhost:3000/api/tasks', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(task)
+            });
+        } catch (e) {
+            console.error("Backend offline. Created task locally:", e);
+        }
+    },
+
+    // Helper functions for MongoDB Meeting backend calls
+    async saveMeetingToBackend(meeting) {
+        try {
+            const token = this.getAuthToken();
+            if (!token) return;
+            await fetch('http://localhost:3000/api/meetings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(meeting)
+            });
+        } catch (e) {
+            console.error("Backend offline. Created meeting locally:", e);
+        }
     },
 
     // Guaranteed task toggle & persistence engine
@@ -368,7 +414,9 @@ const WorkspaceCore = {
         if (profileForm) {
             profileForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                await window.saveUserProfileForm(e);
+                if (typeof window.saveUserProfileForm === 'function') {
+                    await window.saveUserProfileForm(e);
+                }
             });
         }
 
@@ -639,7 +687,9 @@ const WorkspaceCore = {
                     if (matchedTask) {
                         tasks = tasks.filter(t => t.id !== matchedTask.id && t._id !== matchedTask._id);
                         this.set('tasks', tasks);
-                        await window.deleteTaskRecordBackend(matchedTask.id || matchedTask._id);
+                        if (typeof window.deleteTaskRecordBackend === 'function') {
+                            await window.deleteTaskRecordBackend(matchedTask.id || matchedTask._id);
+                        }
                         this.logActivity(`Deleted task: "${data.title}"`);
                         if (speakCallback) speakCallback(`Deleted task: ${data.title}`);
                     }
@@ -681,7 +731,9 @@ const WorkspaceCore = {
                     if (matchedMeeting) {
                         meetings = meetings.filter(m => m.id !== matchedMeeting.id && m._id !== matchedMeeting._id);
                         this.set('meetings', meetings);
-                        await window.deleteMeetingRecordBackend(matchedMeeting.id || matchedMeeting._id);
+                        if (typeof window.deleteMeetingRecordBackend === 'function') {
+                            await window.deleteMeetingRecordBackend(matchedMeeting.id || matchedMeeting._id);
+                        }
                         this.logActivity(`Deleted meeting: "${data.title}"`);
                         if (speakCallback) speakCallback(`Deleted meeting ${data.title}.`);
                     }
@@ -713,189 +765,49 @@ const WorkspaceCore = {
             case "ANSWER_QUESTION":
                 if (data.aiResponseText) {
                     if (speakCallback) speakCallback(data.aiResponseText);
-                    alert(`🎙️ AI Assistant:\n\n"${data.aiResponseText}"`);
                 }
                 break;
-        }
-        
-        this.dispatchViewSpecificRenders();
-    },
 
-    async saveTaskToBackend(task) {
-        try {
-            await fetch('http://localhost:3000/api/tasks', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.getAuthToken()}`
-                },
-                body: JSON.stringify(task)
-            });
-        } catch(e) { 
-            console.error('Error saving task to backend (retaining local state):', e); 
-        }
-    },
-
-    async saveMeetingToBackend(meeting) {
-        try {
-            await fetch('http://localhost:3000/api/meetings', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.getAuthToken()}`
-                },
-                body: JSON.stringify(meeting)
-            });
-        } catch(e) { 
-            console.error('Error saving meeting to backend (retaining local state):', e); 
+            default:
+                if (speakCallback) speakCallback("Action received, but no handler was configured.");
+                break;
         }
     }
 };
 
-// Global Execution Handles
-window.toggleTaskComplete = (id) => WorkspaceCore.toggleTaskComplete(id);
-window.toggleMeetingComplete = (id) => WorkspaceCore.toggleMeetingComplete(id);
-
-// MONGODB API SYNCHRONIZATION OVERRIDES FOR WORKSPACE (JWT SECURED)
-if (typeof WorkspaceCore !== 'undefined') {
-    
-    WorkspaceCore.syncWithMongoDB = async function() {
-        const token = this.getAuthToken();
+// Global delete meeting backend signature export
+window.deleteMeetingRecordBackend = async function(id) {
+    try {
+        const token = WorkspaceCore.getAuthToken();
         if (!token) return;
-
-        try {
-            const headers = { 'Authorization': `Bearer ${token}` };
-
-            // 1. Sync Tasks Down from MongoDB
-            const taskRes = await fetch('http://localhost:3000/api/tasks', { headers });
-            if (taskRes.status === 401) { this.logout(); return; }
-            
-            if (taskRes.ok) {
-                const cloudTasks = await taskRes.json();           
-                if (Array.isArray(cloudTasks) && cloudTasks.length > 0) {
-                    const formattedTasks = cloudTasks.map(t => ({
-                        id: t._id || t.id,
-                        title: t.title,
-                        priority: t.priority || "medium",
-                        category: t.category || "General",
-                        dueDate: t.dueDate || t.due_date || "",
-                        completed: t.completed === true || t.completed === 'true'
-                    }));
-                    
-                    // Merge local completion states if already toggled locally
-                    const localTasks = this.get('tasks') || [];
-                    const mergedTasks = formattedTasks.map(cloudTask => {
-                        const localMatch = localTasks.find(l => l.id == cloudTask.id || l._id == cloudTask.id);
-                        if (localMatch && localMatch.completed !== cloudTask.completed) {
-                            return { ...cloudTask, completed: localMatch.completed };
-                        }
-                        return cloudTask;
-                    });
-
-                    this.set('tasks', mergedTasks);
-                }
+        await fetch(`http://localhost:3000/api/meetings/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
             }
-
-            // 2. Sync Meetings Down from MongoDB
-            const meetRes = await fetch('http://localhost:3000/api/meetings', { headers });
-            if (meetRes.status === 401) { this.logout(); return; }
-
-            if (meetRes.ok) {
-                const cloudMeets = await meetRes.json();          
-                if (Array.isArray(cloudMeets) && cloudMeets.length > 0) {
-                    const formattedMeets = cloudMeets.map(m => ({
-                        id: m._id || m.id,
-                        title: m.title,
-                        date: m.date,
-                        time: m.time,
-                        participants: m.participants || "",
-                        description: m.description || "",
-                        completed: m.completed === true || m.completed === 'true'
-                    }));
-
-                    const localMeets = this.get('meetings') || [];
-                    const mergedMeets = formattedMeets.map(cloudMeet => {
-                        const localMatch = localMeets.find(l => l.id == cloudMeet.id || l._id == cloudMeet.id);
-                        if (localMatch && localMatch.completed !== cloudMeet.completed) {
-                            return { ...cloudMeet, completed: localMatch.completed };
-                        }
-                        return cloudMeet;
-                    });
-
-                    this.set('meetings', mergedMeets);
-                }
-            }
-
-            // 3. Sync User Profile Down from MongoDB
-            const profileRes = await fetch('http://localhost:3000/api/profile', { headers });
-            if (profileRes.status === 401) { this.logout(); return; }
-
-            if (profileRes.ok) {
-                const cloudProfile = await profileRes.json();
-                if (cloudProfile && (cloudProfile.userId || cloudProfile.email || cloudProfile._id)) {
-                    const currentLocal = this.getCurrentUser();
-                    const mergedProfile = { ...currentLocal, ...cloudProfile };
-                    localStorage.setItem(USER_KEY, JSON.stringify(mergedProfile));
-                    this.updateProfileUI();
-                    this.renderProfileView();
-                }
-            }
-
-            this.dispatchViewSpecificRenders();
-        } catch (e) {
-            console.error("MongoDB backend offline or unreachable. Retaining local operational state:", e);
-        }
-    };
-
-    const baseInit = WorkspaceCore.init;
-    WorkspaceCore.init = async function() {
-        baseInit.apply(this, arguments);
-        try {
-            await this.syncWithMongoDB();
-        } catch(e) {
-            console.error("Cloud dynamic mapping bypassed due to initialization errors:", e);
-        }
-    };
-
-    window.deleteTaskRecordBackend = async function(id) {
-        if (!id) return;
-        try {
-            await fetch(`http://localhost:3000/api/tasks/${id}`, { 
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${WorkspaceCore.getAuthToken()}` }
-            });
-        } catch(e) { console.error(e); }
-    };
-
-    window.deleteMeetingRecordBackend = async function(id) {
-        if (!id) return;
-        try {
-            await fetch(`http://localhost:3000/api/meetings/${id}`, { 
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${WorkspaceCore.getAuthToken()}` }
-            });
-        } catch(e) { console.error(e); }
-    };
-}
-
-// Save profile form submission helper
-window.saveUserProfileForm = async function(event) {
-    if (event) event.preventDefault();
-
-    const updatedData = {
-        name: document.getElementById('full-name')?.value || document.getElementById('profile-name-input')?.value,
-        email: document.getElementById('email')?.value || document.getElementById('profile-email-input')?.value,
-        role: document.getElementById('job-title')?.value || document.getElementById('profile-role-input')?.value,
-        phone: document.getElementById('phone-number')?.value || document.getElementById('profile-phone-input')?.value,
-        location: document.getElementById('work-location')?.value || document.getElementById('profile-location-input')?.value,
-        bio: document.getElementById('bio')?.value || document.getElementById('profile-bio-input')?.value
-    };
-
-    await WorkspaceCore.updateProfile(updatedData);
-    alert("Profile details saved successfully!");
+        });
+    } catch (err) {
+        console.error("Error connecting to backend meeting deletion route:", err);
+    }
 };
 
-// Application Bootstrapper
+// Global delete task backend signature export
+window.deleteTaskRecordBackend = async function(id) {
+    try {
+        const token = WorkspaceCore.getAuthToken();
+        if (!token) return;
+        await fetch(`http://localhost:3000/api/tasks/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+    } catch (err) {
+        console.error("Error connecting to backend task deletion route:", err);
+    }
+};
+
+// Initialize application lifecycle on DOM Load
 document.addEventListener('DOMContentLoaded', () => {
     WorkspaceCore.init();
 });

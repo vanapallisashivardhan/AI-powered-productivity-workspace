@@ -80,7 +80,7 @@
                 <span>Tasks</span>
             </a>
         </li>
-        <li class="sidebar-item">
+        <li class="sidebar-item active">
             <a href="meetings.html">
                 <i class="fa-solid fa-video"></i>
                 <span>Meetings</span>
@@ -269,15 +269,23 @@
         }
 
         function toggleMeetingState(id) {
-            let m = MeetingStorage.get();
-            m = m.map(item => String(item.id) === String(id) ? {...item, completed: !item.completed} : item);
-            MeetingStorage.set(m);
-            renderMeetingAgenda();
+            if (typeof window.toggleMeetingComplete === 'function') {
+                window.toggleMeetingComplete(id);
+            } else {
+                let m = MeetingStorage.get();
+                m = m.map(item => String(item.id) === String(id) ? {...item, completed: !item.completed} : item);
+                MeetingStorage.set(m);
+                renderMeetingAgenda();
+            }
         }
 
         function deleteMeetingRecord(id) {
-            if (typeof window.deleteMeetingRecordSupabase === 'function') {
-                window.deleteMeetingRecordSupabase(id).then(() => {
+            if (typeof window.deleteMeetingRecordBackend === 'function') {
+                window.deleteMeetingRecordBackend(id).then(() => {
+                    let m = MeetingStorage.get();
+                    m = m.filter(item => String(item.id) !== String(id));
+                    MeetingStorage.set(m);
+                    MeetingStorage.log(`Meeting session structural node removed: Signature ${id}`);
                     renderMeetingAgenda();
                 });
             } else {

@@ -34,10 +34,10 @@
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         body { background-color: var(--bg-primary); color: var(--text-primary); display: flex; min-height: 100vh; }
         
-        .sidebar { width: 260px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; position: fixed; height: 100vh; }
+        .sidebar { width: 260px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; position: fixed; height: 100vh; z-index: 100; }
         .sidebar-brand { padding: 24px; font-size: 1.25rem; font-weight: 700; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border-color); }
         .sidebar-menu { list-style: none; padding: 24px 16px; display: flex; flex-direction: column; gap: 8px; }
-        .sidebar-item a { display: flex; align-items: center; gap: 16px; padding: 14px 16px; color: var(--text-secondary); text-decoration: none; border-radius: 12px; }
+        .sidebar-item a { display: flex; align-items: center; gap: 16px; padding: 14px 16px; color: var(--text-secondary); text-decoration: none; border-radius: 12px; transition: all 0.2s ease; }
         .sidebar-item.active a, .sidebar-item a:hover { background: var(--accent-gradient); color: #ffffff; }
 
         .main-content { margin-left: 260px; flex-grow: 1; padding: 40px; max-width: calc(100% - 260px); }
@@ -51,7 +51,7 @@
         .charts-container { display: grid; grid-template-columns: 1fr; gap: 24px; }
         .chart-card { background: var(--bg-secondary); backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: var(--card-radius); padding: 24px; box-shadow: var(--glass-shadow); height: 420px; }
         
-        .voice-fab { position: fixed; bottom: 32px; right: 32px; width: 64px; height: 64px; border-radius: 50%; background: var(--accent-gradient); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border: none; cursor: pointer; z-index: 1000; }
+        .voice-fab { position: fixed; bottom: 32px; right: 32px; width: 64px; height: 64px; border-radius: 50%; background: var(--accent-gradient); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border: none; cursor: pointer; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
         .voice-fab.listening { animation: pulse 1.5s infinite; background: linear-gradient(135deg, #ef4444, #3b82f6); }
         .voice-status-toast { position: fixed; bottom: 110px; right: 32px; background: rgba(15, 23, 42, 0.9); color: #fff; padding: 12px 20px; border-radius: 30px; font-size: 0.9rem; z-index: 1000; display: none; border: 1px solid var(--border-color); }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); box-shadow: 0 0 20px rgba(59, 130, 246, 0.6); } 100% { transform: scale(1); } }
@@ -84,7 +84,7 @@
                 <span>Meetings</span>
             </a>
         </li>
-        <li class="sidebar-item">
+        <li class="sidebar-item active">
             <a href="analysis.html">
                 <i class="fa-solid fa-chart-line"></i>
                 <span>Analysis</span>
@@ -122,89 +122,98 @@
     </div>
 </nav>
 
-    <main class="main-content">
-        <header class="navbar">
-            <h2>Workspace Performance Data Analytics</h2>
-            <div style="font-weight: 600;">Vector Metric Engine</div>
-        </header>
+<main class="main-content">
+    <header class="navbar">
+        <h2>Workspace Performance Data Analytics</h2>
+        <div style="font-weight: 600;">Vector Metric Engine</div>
+    </header>
 
-        <section class="analysis-grid">
-            <div class="metric-card">
-                <div class="metric-info">
-                    <span style="color:var(--text-secondary); font-size:0.9rem;">Productivity Vector</span>
-                    <h3 id="ana-prod-score">0%</h3>
-                </div>
-                <div class="metric-icon" style="color:#3b82f6; background:rgba(59,130,246,0.1);"><i class="fa-solid fa-bolt"></i></div>
+    <section class="analysis-grid">
+        <div class="metric-card">
+            <div class="metric-info">
+                <span style="color:var(--text-secondary); font-size:0.9rem;">Productivity Vector</span>
+                <h3 id="ana-prod-score">0%</h3>
             </div>
-        </section>
+            <div class="metric-icon" style="color:#3b82f6; background:rgba(59,130,246,0.1);"><i class="fa-solid fa-bolt"></i></div>
+        </div>
+    </section>
 
-        <section class="charts-container">
-            <div class="chart-card">
-                <h3 style="margin-bottom:16px; font-size:1rem; color:var(--text-secondary);">State Distribution Breakdown Matrix</h3>
-                <div style="position: relative; height: calc(100% - 40px);"><canvas id="barDistributionChart"></canvas></div>
-            </div>
-        </section>
-    </main>
+    <section class="charts-container">
+        <div class="chart-card">
+            <h3 style="margin-bottom:16px; font-size:1rem; color:var(--text-secondary);">State Distribution Breakdown Matrix</h3>
+            <div style="position: relative; height: calc(100% - 40px);"><canvas id="barDistributionChart"></canvas></div>
+        </div>
+    </section>
+</main>
 
-    <div class="voice-status-toast" id="voice-toast"><span id="voice-toast-text"></span></div>
-    <button class="voice-fab" id="voice-activation-trigger"><i class="fa-solid fa-microphone"></i></button>
+<div class="voice-status-toast" id="voice-toast"><span id="voice-toast-text"></span></div>
+<button class="voice-fab" id="voice-activation-trigger"><i class="fa-solid fa-microphone"></i></button>
 
-    <!-- Included main.js before executing custom logic so WorkspaceCore is available -->
-    <script src="main.js"></script>
+<!-- Main Workspace Logic -->
+<script src="main.js"></script>
 
-    <script>
-        const AnalysisEngine = {
-            computeAndRenderMetrics() {
-                // Fetch tasks and meetings via WorkspaceCore scoped getters
-                const tasks = (typeof WorkspaceCore !== 'undefined') 
-                    ? WorkspaceCore.get('tasks') 
-                    : (JSON.parse(localStorage.getItem('tasks')) || []);
+<script>
+    const AnalysisEngine = {
+        computeAndRenderMetrics() {
+            // Fetch tasks and meetings via WorkspaceCore scoped getters or localStorage fallback
+            const tasks = (typeof WorkspaceCore !== 'undefined') 
+                ? WorkspaceCore.get('tasks') 
+                : (JSON.parse(localStorage.getItem('tasks')) || []);
 
-                const meetings = (typeof WorkspaceCore !== 'undefined') 
-                    ? WorkspaceCore.get('meetings') 
-                    : (JSON.parse(localStorage.getItem('meetings')) || []);
+            const meetings = (typeof WorkspaceCore !== 'undefined') 
+                ? WorkspaceCore.get('meetings') 
+                : (JSON.parse(localStorage.getItem('meetings')) || []);
 
-                const compTasks = tasks.filter(t => t.completed).length;
-                const pendTasks = tasks.filter(t => !t.completed).length;
-                const compMeetings = meetings.filter(m => m.completed).length;
-                const pendMeetings = meetings.filter(m => !m.completed).length;
+            const compTasks = tasks.filter(t => t.completed).length;
+            const pendTasks = tasks.filter(t => !t.completed).length;
+            const compMeetings = meetings.filter(m => m.completed).length;
+            const pendMeetings = meetings.filter(m => !m.completed).length;
 
-                const totalItems = tasks.length + meetings.length;
-                const score = totalItems === 0 ? 0 : Math.round(((compTasks + compMeetings) / totalItems) * 100);
+            const totalItems = tasks.length + meetings.length;
+            const score = totalItems === 0 ? 0 : Math.round(((compTasks + compMeetings) / totalItems) * 100);
 
-                if(document.getElementById('ana-prod-score')) {
-                    document.getElementById('ana-prod-score').innerText = score + '%';
-                }
-
-                if(window.chartInstanceBar) window.chartInstanceBar.destroy();
-                
-                const ctx = document.getElementById('barDistributionChart');
-                if (ctx) {
-                    window.chartInstanceBar = new Chart(ctx.getContext('2d'), {
-                        type: 'bar',
-                        data: {
-                            labels: ['Done Tasks', 'Pending Tasks', 'Done Meets', 'Pending Meets'],
-                            datasets: [{
-                                label: 'Total Structural Elements Count',
-                                data: [compTasks, pendTasks, compMeetings, pendMeetings],
-                                backgroundColor: ['#10b981', '#3b82f6', '#ec4899', '#f59e0b']
-                            }]
-                        },
-                        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
-                    });
-                }
+            if(document.getElementById('ana-prod-score')) {
+                document.getElementById('ana-prod-score').innerText = score + '%';
             }
-        };
 
-        window.addEventListener('DOMContentLoaded', () => {
-            AnalysisEngine.computeAndRenderMetrics();
-        });
+            if(window.chartInstanceBar) window.chartInstanceBar.destroy();
+            
+            const ctx = document.getElementById('barDistributionChart');
+            if (ctx) {
+                window.chartInstanceBar = new Chart(ctx.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: ['Done Tasks', 'Pending Tasks', 'Done Meets', 'Pending Meets'],
+                        datasets: [{
+                            label: 'Total Structural Elements Count',
+                            data: [compTasks, pendTasks, compMeetings, pendMeetings],
+                            backgroundColor: ['#10b981', '#3b82f6', '#ec4899', '#f59e0b']
+                        }]
+                    },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        scales: { 
+                            y: { 
+                                beginAtZero: true,
+                                ticks: { stepSize: 1 }
+                            } 
+                        } 
+                    }
+                });
+            }
+        }
+    };
 
-        // Re-render chart if WorkspaceCore triggers a state sync/update
-        window.addEventListener('workspaceStateUpdated', () => {
-            AnalysisEngine.computeAndRenderMetrics();
-        });
-    </script>
-    
+    window.addEventListener('DOMContentLoaded', () => {
+        AnalysisEngine.computeAndRenderMetrics();
+    });
+
+    // Re-render chart whenever WorkspaceCore triggers state sync updates
+    window.addEventListener('workspaceStateUpdated', () => {
+        AnalysisEngine.computeAndRenderMetrics();
+    });
+</script>
+
 </body>
 </html>

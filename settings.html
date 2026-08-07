@@ -91,7 +91,7 @@
                 <span>Analysis</span>
             </a>
         </li>
-        <li class="sidebar-item">
+        <li class="sidebar-item active">
             <a href="settings.html">
                 <i class="fa-solid fa-gear"></i>
                 <span>Settings</span>
@@ -123,65 +123,73 @@
     </div>
 </nav>
 
-    <main class="main-content">
-        <header class="navbar">
-            <h2>Workspace System Preferences</h2>
-            <div style="font-weight: 600;">Control Core Console</div>
-        </header>
+<main class="main-content">
+    <header class="navbar">
+        <h2>Workspace System Preferences</h2>
+        <div style="font-weight: 600;">Control Core Console</div>
+    </header>
 
-        <section style="max-width: 800px;">
-            <div class="card">
-                <h3>Visuals & Theme Layer Configurations</h3>
-                <div class="settings-row">
-                    <div><strong>Dark Mode System Configuration</strong><p style="font-size:0.85rem; color:var(--text-secondary);">Toggle system wide low-light UI configuration matrix properties</p></div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="theme-toggle-checkbox" onchange="handleThemeToggleChange(this.checked)">
-                        <span class="slider"></span>
-                    </label>
+    <section style="max-width: 800px;">
+        <div class="card">
+            <h3>Visuals & Theme Layer Configurations</h3>
+            <div class="settings-row">
+                <div>
+                    <strong>Dark Mode System Configuration</strong>
+                    <p style="font-size:0.85rem; color:var(--text-secondary);">Toggle system wide low-light UI configuration matrix properties</p>
                 </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="theme-toggle-checkbox" onchange="handleThemeToggleChange(this.checked)">
+                    <span class="slider"></span>
+                </label>
             </div>
+        </div>
 
-            <div class="card" style="border: 1px solid rgba(239, 68, 68, 0.4);">
-                <h3 style="color:#ef4444;">Danger Zone System Clear Directives</h3>
-                <div class="settings-row">
-                    <div><strong>Purge Workspace & Reset LocalStorage Space</strong><p style="font-size:0.85rem; color:var(--text-secondary);">Irreversibly vaporizes all current tasks, meetings, and activity audit trails logs</p></div>
-                    <button class="btn-action btn-danger" onclick="purgeWorkspaceMemory()"><i class="fa-solid fa-trash-can"></i> Factory Wipe Space</button>
+        <div class="card" style="border: 1px solid rgba(239, 68, 68, 0.4);">
+            <h3 style="color:#ef4444;">Danger Zone System Clear Directives</h3>
+            <div class="settings-row">
+                <div>
+                    <strong>Purge Workspace & Reset LocalStorage Space</strong>
+                    <p style="font-size:0.85rem; color:var(--text-secondary);">Irreversibly vaporizes all current tasks, meetings, and activity audit trails logs</p>
                 </div>
+                <button class="btn-action btn-danger" onclick="purgeWorkspaceMemory()">
+                    <i class="fa-solid fa-trash-can"></i> Factory Wipe Space
+                </button>
             </div>
-        </section>
-    </main>
+        </div>
+    </section>
+</main>
 
-    <script>
-        function initSettingsForm() {
-            const currentSettings = JSON.parse(localStorage.getItem('settings')) || {theme:'dark'};
-            document.documentElement.setAttribute('data-theme', currentSettings.theme);
-            document.getElementById('theme-toggle-checkbox').checked = (currentSettings.theme === 'dark');
+<script>
+    function initSettingsForm() {
+        const currentSettings = JSON.parse(localStorage.getItem('settings')) || { theme: 'dark' };
+        document.documentElement.setAttribute('data-theme', currentSettings.theme);
+        document.getElementById('theme-toggle-checkbox').checked = (currentSettings.theme === 'dark');
+    }
+
+    function handleThemeToggleChange(isDark) {
+        const newThemeString = isDark ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', newThemeString);
+        
+        const settingsObj = JSON.parse(localStorage.getItem('settings')) || {};
+        settingsObj.theme = newThemeString;
+        localStorage.setItem('settings', JSON.stringify(settingsObj));
+        
+        // Record to Event Tracking System Logs
+        let logs = JSON.parse(localStorage.getItem('activity')) || [];
+        logs.unshift({ log: `Theme presentation layer systematically adjusted to: ${newThemeString.toUpperCase()}`, time: new Date().toLocaleString() });
+        localStorage.setItem('activity', JSON.stringify(logs.slice(0, 15)));
+    }
+
+    function purgeWorkspaceMemory() {
+        if (confirm("Are you absolutely positive you want to completely erase the client storage runtime footprint? This operation cannot be rolled back!")) {
+            localStorage.clear();
+            alert("Runtime engine storage spaces successfully cleared out to defaults.");
+            window.location.href = 'index.html';
         }
+    }
 
-        function handleThemeToggleChange(isDark) {
-            const newThemeString = isDark ? 'dark' : 'light';
-            document.documentElement.setAttribute('data-theme', newThemeString);
-            
-            const settingsObj = JSON.parse(localStorage.getItem('settings')) || {};
-            settingsObj.theme = newThemeString;
-            localStorage.setItem('settings', JSON.stringify(settingsObj));
-            
-            // Record to Event Tracking System Logs
-            let logs = JSON.parse(localStorage.getItem('activity')) || [];
-            logs.unshift({log: `Theme presentation layer systematically adjusted to: ${newThemeString.toUpperCase()}`, time: new Date().toLocaleString()});
-            localStorage.setItem('activity', JSON.stringify(logs.slice(0, 15)));
-        }
-
-        function purgeWorkspaceMemory() {
-            if(confirm("Are you absolutely positive you want to completely erase the client storage runtime footprint? This operation cannot be rolled back!")) {
-                localStorage.clear();
-                alert("Runtime engine storage spaces successfully cleared out to defaults.");
-                window.location.href = 'index.html';
-            }
-        }
-
-        window.onload = initSettingsForm;
-    </script>
-    <script src="main.js"></script>
+    window.onload = initSettingsForm;
+</script>
+<script src="main.js"></script>
 </body>
 </html>

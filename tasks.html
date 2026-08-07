@@ -61,6 +61,7 @@
         .task-actions { display: flex; gap: 8px; }
         .action-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 4px; }
         .action-btn.complete { color: #10b981; }
+        .action-btn.edit { color: var(--text-secondary); }
         .action-btn.delete { color: #ef4444; }
 
         .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
@@ -87,7 +88,7 @@
                 <span>Dashboard</span>
             </a>
         </li>
-        <li class="sidebar-item">
+        <li class="sidebar-item active">
             <a href="tasks.html">
                 <i class="fa-solid fa-list-check"></i>
                 <span>Tasks</span>
@@ -173,7 +174,7 @@
                         <label>Target Execution Due Date</label>
                         <input type="date" id="task-duedate" class="form-control" required>
                     </div>
-                    <button type="submit" class="btn-submit">Commit to Storage Matrix</button>
+                    <button type="submit" id="submit-btn" class="btn-submit">Commit to Storage Matrix</button>
                 </form>
             </div>
 
@@ -192,8 +193,7 @@
                     </select>
                 </div>
 
-                <div class="task-list-wrapper" id="master-tasks-render-zone">
-                </div>
+                <div class="task-list-wrapper" id="master-tasks-render-zone"></div>
             </div>
         </section>
     </main>
@@ -205,36 +205,43 @@
 
     <script src="main.js"></script>
     <script>
-        // Set up a global rendering hook that main.js can tap into automatically
+        // Global rendering hook accessed by main.js and local input events
         window.renderTaskCollection = function() {
             if (typeof WorkspaceCore === 'undefined') return;
             const tasks = WorkspaceCore.get('tasks') || [];
-            const searchVal = document.getElementById('task-search-input').value.toLowerCase();
-            const priorityFilter = document.getElementById('filter-priority-select').value;
-            const sortOrder = document.getElementById('sort-order-select').value;
+            
+            const searchInput = document.getElementById('task-search-input');
+            const prioritySelect = document.getElementById('filter-priority-select');
+            const sortSelect = document.getElementById('sort-order-select');
+
+            const searchVal = searchInput ? searchInput.value.toLowerCase() : '';
+            const priorityFilter = prioritySelect ? prioritySelect.value : 'ALL';
+            const sortOrder = sortSelect ? sortSelect.value : 'NEWEST';
 
             let processingList = [...tasks];
 
-            if(searchVal) {
+            if (searchVal) {
                 processingList = processingList.filter(t => t.title && t.title.toLowerCase().includes(searchVal));
             }
-            if(priorityFilter !== 'ALL') {
+            if (priorityFilter !== 'ALL') {
                 processingList = processingList.filter(t => t.priority === priorityFilter);
             }
-            if(sortOrder === 'DUEDATE') {
-                processingList.sort((a,b) => new Date(a.dueDate || a.due_date) - new Date(b.dueDate || b.due_date));
+            if (sortOrder === 'DUEDATE') {
+                processingList.sort((a,b) => new Date(a.dueDate || a.due_date || 0) - new Date(b.dueDate || b.due_date || 0));
             } else {
-                processingList.sort((a,b) => b.id - a.id);
+                processingList.sort((a,b) => Number(b.id) - Number(a.id));
             }
 
             const wrapper = document.getElementById('master-tasks-render-zone');
-            if(processingList.length === 0) {
-                wrapper.innerHTML = '<div class="card" style="text-align:center;color:var(--text-secondary);">No tasks match execution filter requirements.</div>';
+            if (!wrapper) return;
+
+            if (processingList.length === 0) {
+                wrapper.innerHTML = '<div class="card" style="text-align:center; color:var(--text-secondary); padding: 2rem;">No operational workflows match execution filter requirements.</div>';
                 return;
             }
 
             wrapper.innerHTML = processingList.map(t => {
-                const displayDueDate = t.dueDate || t.due_date || '';
+                const displayDueDate = t.dueDate || t.due_date || 'No Target Date';
                 return `
                 <div class="task-item ${t.completed ? 'completed' : ''}">
                     <div>
@@ -245,73 +252,44 @@
                         </div>
                     </div>
                     <div class="task-actions">
+                        <button class="action-btn edit" onclick="editTaskRecord(${t.id})" title="Edit Task Requirements"><i class="fa-solid fa-pen-to-square"></i></button>
                         <button class="action-btn complete" onclick="toggleTaskCompletion(${t.id})" title="Toggle Completion Status"><i class="fa-solid ${t.completed ? 'fa-rotate-left' : 'fa-circle-check'}"></i></button>
                         <button class="action-btn delete" onclick="deleteTaskRecord(${t.id})" title="Destroy Object Record"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
             `}).join('');
         };
-// Replace your existing renderTaskCollection or ensure it looks like this:
-function renderTaskCollection() {
-    const tasks = WorkspaceCore.get('tasks') || [];
-    const container = document.getElementById('task-collection-container');
-    if (!container) return;
 
-    if (tasks.length === 0) {
-        container.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:2rem;">No operational workflows registered.</div>';
-        return;
-    }
+        function editTaskRecord(id) {
+            let tasks = WorkspaceCore.get('tasks') || [];
+            let targetTask = tasks.find(t => Number(t.id) === Number(id));
+            
+            if (!targetTask) return;
 
-    container.innerHTML = tasks.map(t => `
-        <div class="task-card ${t.completed ? 'completed' : ''}">
-            <div style="flex:1;">
-                <h4 style="margin:0 0 0.5rem 0; ${t.completed ? 'text-decoration:line-through;color:var(--text-secondary);' : ''}">${t.title}</h4>
-                <div style="font-size:0.8rem; color:var(--text-secondary);">
-                    <span><i class="fa-solid fa-calendar-day"></i> ${t.dueDate || 'No Due Date'}</span> | 
-                    <span><i class="fa-solid fa-layer-group"></i> ${t.category || 'General'}</span>
-                </div>
-            </div>
-            <div style="display:flex; gap:0.5rem; align-items:center;">
-                <button onclick="editTaskRecord(${t.id})" style="background:transparent; border:none; color:var(--text-secondary); cursor:pointer;"><i class="fa-solid fa-pen-to-square"></i></button>
-                <button onclick="toggleTaskCompletion(${t.id})" style="background:transparent; border:none; color:${t.completed ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer;"><i class="fa-solid ${t.completed ? 'fa-circle-check' : 'fa-circle'}"></i></button>
-                <button onclick="deleteTaskRecord(${t.id})" style="background:transparent; border:none; color:#ef4444; cursor:pointer;"><i class="fa-solid fa-trash-can"></i></button>
-            </div>
-        </div>
-    `).join('');
-}
+            document.getElementById('task-edit-id').value = targetTask.id;
+            document.getElementById('task-title').value = targetTask.title || '';
+            document.getElementById('task-priority').value = targetTask.priority || 'Medium';
+            document.getElementById('task-category').value = targetTask.category || 'General';
+            document.getElementById('task-duedate').value = targetTask.dueDate || targetTask.due_date || '';
+            
+            document.getElementById('form-title').innerText = "Update Workspace Task";
+            document.getElementById('submit-btn').innerText = "Update Matrix Record";
+        }
 
-// Add this function right below renderTaskCollection()
-function editTaskRecord(id) {
-    let tasks = WorkspaceCore.get('tasks') || [];
-    let recordToUpdate = tasks.find(t => Number(t.id) === Number(id));
-    
-    if (!recordToUpdate) return;
-    
-    const newTitle = prompt("Update Task Title:", recordToUpdate.title);
-    if (newTitle === null || newTitle.trim() === "") return;
-    
-    recordToUpdate.title = newTitle.trim();
-    
-    // Save to local storage & push upsert request to backend server
-    WorkspaceCore.set('tasks', tasks); 
-    renderTaskCollection();
-    WorkspaceCore.dispatchViewSpecificRenders();
-}
         function saveTaskRecord(e) {
             e.preventDefault();
             const id = document.getElementById('task-edit-id').value;
-            const title = document.getElementById('task-title').value;
+            const title = document.getElementById('task-title').value.trim();
             const priority = document.getElementById('task-priority').value;
             const category = document.getElementById('task-category').value;
             const dueDate = document.getElementById('task-duedate').value;
 
             let tasks = WorkspaceCore.get('tasks') || [];
 
-            if(id) {
-                tasks = tasks.map(t => t.id == id ? {...t, title, priority, category, dueDate} : t);
+            if (id) {
+                tasks = tasks.map(t => Number(t.id) === Number(id) ? { ...t, title, priority, category, dueDate, due_date: dueDate } : t);
                 WorkspaceCore.logActivity(`Task updated explicitly: "${title}"`);
             } else {
-                // Generate a valid dynamic payload that syncs cleanly with backend definitions
                 tasks.unshift({
                     id: Date.now(), 
                     title, 
@@ -325,28 +303,44 @@ function editTaskRecord(id) {
             }
 
             WorkspaceCore.set('tasks', tasks);
+            
+            // Reset form state
             document.getElementById('task-creation-form').reset();
             document.getElementById('task-edit-id').value = '';
+            document.getElementById('form-title').innerText = "Create Workspace Task";
+            document.getElementById('submit-btn').innerText = "Commit to Storage Matrix";
             
-            // Force rendering refresh instantly
+            // Re-render locally & sync backend
             renderTaskCollection();
+            if (typeof syncDataWithBackend === 'function') {
+                syncDataWithBackend();
+            }
         }
 
         function toggleTaskCompletion(id) {
-            let tasks = WorkspaceCore.get('tasks') || [];
-            tasks = tasks.map(t => t.id === id ? {...t, completed: !t.completed} : t);
-            WorkspaceCore.set('tasks', tasks);
-            WorkspaceCore.logActivity(`Task object state toggled for target signature: ${id}`);
-            renderTaskCollection();
+            if (typeof window.toggleTaskComplete === 'function') {
+                window.toggleTaskComplete(id);
+            } else {
+                let tasks = WorkspaceCore.get('tasks') || [];
+                tasks = tasks.map(t => Number(t.id) === Number(id) ? {...t, completed: !t.completed} : t);
+                WorkspaceCore.set('tasks', tasks);
+                WorkspaceCore.logActivity(`Task object state toggled for target signature: ${id}`);
+                renderTaskCollection();
+            }
         }
 
         function deleteTaskRecord(id) {
-            // If main.js has hooked up the live Supabase deletion framework, call it directly
-            if (typeof window.deleteTaskRecordSupabase === 'function') {
-                window.deleteTaskRecordSupabase(id);
+            if (typeof window.deleteTaskRecordBackend === 'function') {
+                window.deleteTaskRecordBackend(id).then(() => {
+                    let tasks = WorkspaceCore.get('tasks') || [];
+                    tasks = tasks.filter(t => Number(t.id) !== Number(id));
+                    WorkspaceCore.set('tasks', tasks);
+                    WorkspaceCore.logActivity(`Task object permanently removed from pipeline matrix: ${id}`);
+                    renderTaskCollection();
+                });
             } else {
                 let tasks = WorkspaceCore.get('tasks') || [];
-                tasks = tasks.filter(t => t.id !== id);
+                tasks = tasks.filter(t => Number(t.id) !== Number(id));
                 WorkspaceCore.set('tasks', tasks);
                 WorkspaceCore.logActivity(`Task object permanently removed from pipeline matrix: ${id}`);
                 renderTaskCollection();

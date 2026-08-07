@@ -101,6 +101,12 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
+// Helper function to handle string/boolean values
+function filterStringToBoolean(val) {
+    if (typeof val === 'boolean') return val;
+    return val === 'true';
+}
+
 // --- 4. User Authentication Routes ---
 
 // REGISTER ROUTE
@@ -317,11 +323,6 @@ const workspaceTools = [
     }
 ];
 
-function filterStringToBoolean(val) {
-    if (typeof val === 'boolean') return val;
-    return val === 'true';
-}
-
 // AI Voice Processing Route (Authenticated)
 app.post('/api/voice-command', authenticateToken, async (req, res) => {
     const { transcript, currentState } = req.body;
@@ -413,6 +414,38 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
     }
 });
 
+// PUT TASK UPDATE/COMPLETION ROUTE
+app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
+    try {
+        const taskId = parseInt(req.params.id);
+        const updateFields = { ...req.body };
+
+        // Normalize dueDate to due_date mapping if passed from frontend
+        if (updateFields.dueDate !== undefined) {
+            updateFields.due_date = updateFields.dueDate;
+            delete updateFields.dueDate;
+        }
+
+        if (updateFields.completed !== undefined) {
+            updateFields.completed = filterStringToBoolean(updateFields.completed);
+        }
+
+        const updatedTask = await Task.findOneAndUpdate(
+            { userId: req.user.userId, id: taskId },
+            { $set: updateFields },
+            { new: true }
+        );
+
+        if (!updatedTask) {
+            return res.status(404).json({ error: "Task node not found" });
+        }
+
+        res.json({ success: true, task: updatedTask });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.delete('/api/tasks/:id', authenticateToken, async (req, res) => {
     try {
         await Task.deleteOne({ userId: req.user.userId, id: parseInt(req.params.id) });
@@ -464,6 +497,32 @@ app.post('/api/meetings', authenticateToken, async (req, res) => {
             { upsert: true, new: true }
         );
         res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// PUT MEETING UPDATE/COMPLETION ROUTE
+app.put('/api/meetings/:id', authenticateToken, async (req, res) => {
+    try {
+        const meetingId = parseInt(req.params.id);
+        const updateFields = { ...req.body };
+
+        if (updateFields.completed !== undefined) {
+            updateFields.completed = filterStringToBoolean(updateFields.completed);
+        }
+
+        const updatedMeeting = await Meeting.findOneAndUpdate(
+            { userId: req.user.userId, id: meetingId },
+            { $set: updateFields },
+            { new: true }
+        );
+
+        if (!updatedMeeting) {
+            return res.status(404).json({ error: "Meeting node not found" });
+        }
+
+        res.json({ success: true, meeting: updatedMeeting });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
