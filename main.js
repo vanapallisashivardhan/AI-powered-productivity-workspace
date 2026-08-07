@@ -357,10 +357,6 @@ const WorkspaceCore = {
             if (typeof renderTaskCollection === 'function') renderTaskCollection();
         } else if (currentPath === 'meetings.html') {
             if (typeof renderMeetingAgenda === 'function') renderMeetingAgenda();
-        } else if (currentPath === 'analysis.html') {
-            if (typeof AnalysisEngine === 'object' && typeof AnalysisEngine.computeAndRenderMetrics === 'function') {
-                AnalysisEngine.computeAndRenderMetrics();
-            }
         } else if (currentPath === 'profile.html') {
             this.renderProfileView();
         }
@@ -585,17 +581,7 @@ const WorkspaceCore = {
                     activeUserId: this.getActiveProfileId(),
                     userProfile: this.getCurrentUser(),
                     tasks: tasks,
-                    meetings: meetings,
-                    analysisMetricsSummary: {
-                        totalTasksCount: tasks.length,
-                        completedTasksCount: compTasks,
-                        pendingTasksCount: pendTasks,
-                        totalMeetingsCount: meetings.length,
-                        completedMeetingsCount: compMeetings,
-                        pendingMeetingsCount: pendMeetings,
-                        combinedElementsTotal: grandTotal,
-                        calculatedProductivityRatioScore: compositeScore + '%'
-                    }
+                    meetings: meetings
                 };
 
                 const response = await fetch('http://localhost:3000/api/voice-command', {

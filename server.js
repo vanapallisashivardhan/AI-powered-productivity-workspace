@@ -284,7 +284,7 @@ const workspaceTools = [
                     },
                     targetPage: {
                         type: "string",
-                        enum: ["index.html", "tasks.html", "meetings.html", "analysis.html", "profile.html", "settings.html"],
+                        enum: ["index.html", "tasks.html", "meetings.html", "profile.html", "settings.html"],
                         description: "The targeted page filename required if action type is NAVIGATE."
                     },
                     title: {
@@ -540,5 +540,5 @@ app.delete('/api/meetings/:id', authenticateToken, async (req, res) => {
 // --- 9. START EXPRESS SERVER ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Productivity Workspace Backend fully live at http://localhost:${PORT}`);
+    console.log(`Productivity Workspace Backend fully live at http://localhost:${PORT}`);
 });

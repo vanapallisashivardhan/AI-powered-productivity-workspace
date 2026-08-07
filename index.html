@@ -196,13 +196,6 @@
             margin-bottom: 4px;
         }
 
-        .layout-split {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 24px;
-            margin-bottom: 32px;
-        }
-
         .list-container {
             display: flex;
             flex-direction: column;
@@ -273,29 +266,10 @@
             100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
 
-        .quick-action-btn {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            background: rgba(0,0,0,0.02);
-            color: var(--text-primary);
-            cursor: pointer;
-            text-align: left;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-weight: 500;
-            margin-bottom: 8px;
-        }
-        [data-theme="dark"] .quick-action-btn { background: rgba(255,255,255,0.02); }
-        .quick-action-btn:hover { background: var(--accent-gradient); color: white; }
-
         @media(max-width: 1024px) {
             .sidebar { width: 80px; }
             .sidebar-brand span, .sidebar-item span { display: none; }
             .main-content { margin-left: 80px; max-width: calc(100% - 80px); }
-            .layout-split { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -323,12 +297,6 @@
             <a href="meetings.html">
                 <i class="fa-solid fa-video"></i>
                 <span>Meetings</span>
-            </a>
-        </li>
-        <li class="sidebar-item">
-            <a href="analysis.html">
-                <i class="fa-solid fa-chart-line"></i>
-                <span>Analysis</span>
             </a>
         </li>
         <li class="sidebar-item">
@@ -392,34 +360,12 @@
                 <div class="card-stat-header"><span>Upcoming Meetings</span><i class="fa-solid fa-calendar-days"></i></div>
                 <div class="card-stat-value" id="dash-meetings-count">0</div>
             </div>
-            <div class="card">
-                <div class="card-stat-header"><span>Productivity Score</span><i class="fa-solid fa-bolt"></i></div>
-                <div class="card-stat-value" id="dash-productivity-score">0%</div>
-            </div>
         </section>
 
-        <div class="layout-split">
-            <div style="display: flex; flex-direction: column; gap: 24px;">
-                <!-- Graph Canvas Card Container Removed Successfully -->
-                <div class="card">
-                    <h3>Recent System Activity Logs</h3>
-                    <div class="list-container" id="recent-activity-log"></div>
-                </div>
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 24px;">
-                <div class="card">
-                    <h3>Quick Actions</h3>
-                    <div style="margin-top:16px;">
-                        <button class="quick-action-btn" onclick="window.location.href='tasks.html?action=new'"><i class="fa-solid fa-plus"></i> Create New Task</button>
-                        <button class="quick-action-btn" onclick="window.location.href='meetings.html?action=new'"><i class="fa-solid fa-video"></i> Book a Meeting</button>
-                        <button class="quick-action-btn" onclick="window.location.href='analysis.html'"><i class="fa-solid fa-chart-pie"></i> View Detailed Analysis</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3>Upcoming Meetings Today</h3>
-                    <div class="list-container" id="dash-meetings-list"></div>
-                </div>
+        <div style="display: flex; flex-direction: column; gap: 24px; margin-bottom: 32px;">
+            <div class="card">
+                <h3>Recent System Activity Logs</h3>
+                <div class="list-container" id="recent-activity-log"></div>
             </div>
         </div>
     </main>
@@ -432,7 +378,7 @@
     <button class="voice-fab" id="voice-activation-trigger">
         <i class="fa-solid fa-microphone"></i>
     </button>
-    <!-- Core Engineering Core State Router Pipeline Execution Module Connection Layer -->
+
     <script src="main.js"></script>
     <script>
         // Synchronized Data Pump Hook
