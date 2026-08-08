@@ -193,7 +193,7 @@
                             <i class="fa-solid fa-calendar"></i> ${m.date || 'No Date'} at ${m.time || 'No Time'}
                         </div>
                         <p style="font-size:0.9rem; margin-top:8px; color:var(--text-primary);">${m.description || 'No descriptive agenda provided.'}</p>
-                        ${overdue ? '<div class="status-note">NOTE: Incomplete</div>' : ''}
+                        ${overdue ? '<div class="status-note">NOTE: Time Closed</div>' : ''}
                     </div>
                     <div style="display:flex; gap:6px; align-items:center;">
                         <button class="btn-submit" style="padding:6px 12px; background:var(--accent-color); width:auto;" onclick="editMeetingRecord(${m.id})"><i class="fa-solid fa-pen"></i></button>
