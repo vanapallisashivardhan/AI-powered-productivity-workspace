@@ -54,10 +54,10 @@ const taskSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     id: { type: Number, required: true },
     title: { type: String, default: "Untitled Task" },
-    priority: { type: String, default: "medium" },
-    category: { type: String, default: "General" },
     due_date: { type: String },
-    completed: { type: Boolean, default: false }
+    due_time: { type: String, default: "" },
+    completed: { type: Boolean, default: false },
+    overdue: { type: Boolean, default: false }
 }, { timestamps: true });
 
 // Scoped uniqueness per user (User A & User B can both have an item with id: 1)
@@ -70,9 +70,9 @@ const meetingSchema = new mongoose.Schema({
     title: { type: String, default: "Untitled Meeting" },
     date: { type: String },
     time: { type: String, default: "12:00" },
-    participants: { type: String, default: "" },
     description: { type: String, default: "" },
-    completed: { type: Boolean, default: false }
+    completed: { type: Boolean, default: false },
+    overdue: { type: Boolean, default: false }
 }, { timestamps: true });
 
 // Scoped uniqueness per user
@@ -376,11 +376,12 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
         const formattedTasks = tasks.map(t => ({
             id: t.id,
             title: t.title,
-            priority: t.priority,
-            category: t.category,
             dueDate: t.due_date,
             due_date: t.due_date,
-            completed: t.completed
+            dueTime: t.due_time || "",
+            due_time: t.due_time || "",
+            completed: t.completed,
+            overdue: t.overdue || false
         }));
         res.json(formattedTasks);
     } catch (error) {
@@ -397,10 +398,10 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
             userId: req.user.userId,
             id: parseInt(task.id),
             title: task.title || "Untitled Task",
-            priority: task.priority || "medium",
-            category: task.category || "General",
             due_date: task.dueDate || task.due_date || new Date().toISOString().split('T')[0],
-            completed: filterStringToBoolean(task.completed)
+            due_time: task.dueTime || task.due_time || "",
+            completed: filterStringToBoolean(task.completed),
+            overdue: filterStringToBoolean(task.overdue)
         };
 
         await Task.findOneAndUpdate(
@@ -426,6 +427,10 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
             delete updateFields.dueDate;
         }
 
+        if (updateFields.dueTime !== undefined) {
+            updateFields.due_time = updateFields.dueTime;
+            delete updateFields.dueTime;
+        }
         if (updateFields.completed !== undefined) {
             updateFields.completed = filterStringToBoolean(updateFields.completed);
         }
@@ -465,9 +470,9 @@ app.get('/api/meetings', authenticateToken, async (req, res) => {
             title: m.title,
             date: m.date,
             time: m.time,
-            participants: m.participants || "",
             description: m.description || "",
-            completed: m.completed
+            completed: m.completed,
+            overdue: m.overdue || false
         }));
         res.json(formattedMeetings);
     } catch (error) {
@@ -486,9 +491,9 @@ app.post('/api/meetings', authenticateToken, async (req, res) => {
             title: meeting.title || "Untitled Meeting",
             date: meeting.date || new Date().toISOString().split('T')[0],
             time: meeting.time || "12:00",
-            participants: meeting.participants || "",
             description: meeting.description || "",
-            completed: filterStringToBoolean(meeting.completed)
+            completed: filterStringToBoolean(meeting.completed),
+            overdue: filterStringToBoolean(meeting.overdue)
         };
 
         await Meeting.findOneAndUpdate(
@@ -511,7 +516,6 @@ app.put('/api/meetings/:id', authenticateToken, async (req, res) => {
         if (updateFields.completed !== undefined) {
             updateFields.completed = filterStringToBoolean(updateFields.completed);
         }
-
         const updatedMeeting = await Meeting.findOneAndUpdate(
             { userId: req.user.userId, id: meetingId },
             { $set: updateFields },

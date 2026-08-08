@@ -93,7 +93,12 @@ const WorkspaceCore = {
         this.dispatchViewSpecificRenders();
         this.initVoiceAssistant();
         this.bindProfileFormEvents();
+        const cleanTasks = (this.get('tasks') || []).map(({ priority, category, ...task }) => task);
+        const cleanMeetings = (this.get('meetings') || []).map(({ participants, ...meeting }) => meeting);
+        this.set('tasks', cleanTasks);
+        this.set('meetings', cleanMeetings);
         this.bindGlobalTaskEvents();
+        this.initAlarmSystem();
     },
 
     checkAuthGuard() {
@@ -143,6 +148,23 @@ const WorkspaceCore = {
         }
     },
 
+    async updateTaskToBackend(task) {
+        try {
+            const token = this.getAuthToken();
+            if (!token || !task) return;
+            await fetch(`http://localhost:3000/api/tasks/${task.id || task._id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(task)
+            });
+        } catch (e) {
+            console.error("Backend offline. Task update saved locally:", e);
+        }
+    },
+
     // Helper functions for MongoDB Meeting backend calls
     async saveMeetingToBackend(meeting) {
         try {
@@ -161,6 +183,23 @@ const WorkspaceCore = {
         }
     },
 
+    async updateMeetingToBackend(meeting) {
+        try {
+            const token = this.getAuthToken();
+            if (!token || !meeting) return;
+            await fetch(`http://localhost:3000/api/meetings/${meeting.id || meeting._id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(meeting)
+            });
+        } catch (e) {
+            console.error("Backend offline. Meeting update saved locally:", e);
+        }
+    },
+
     // Guaranteed task toggle & persistence engine
     async toggleTaskComplete(taskId) {
         if (!taskId) return;
@@ -170,7 +209,7 @@ const WorkspaceCore = {
 
         tasks = tasks.map(task => {
             if (task.id == taskId || task._id == taskId) {
-                updatedTask = { ...task, completed: !task.completed };
+                updatedTask = { ...task, completed: !task.completed, overdue: false };
                 return updatedTask;
             }
             return task;
@@ -211,7 +250,7 @@ const WorkspaceCore = {
 
         meetings = meetings.map(meeting => {
             if (meeting.id == meetingId || meeting._id == meetingId) {
-                updatedMeeting = { ...meeting, completed: !meeting.completed };
+                updatedMeeting = { ...meeting, completed: !meeting.completed, overdue: false };
                 return updatedMeeting;
             }
             return meeting;
@@ -237,6 +276,99 @@ const WorkspaceCore = {
                 console.error("Backend offline. Saved meeting toggle to LocalStorage:", e);
             }
         }
+    },
+
+    initAlarmSystem() {
+        if (this.alarmTimer) return;
+        this.requestNotificationPermission();
+        this.checkScheduledItems();
+        this.alarmTimer = setInterval(() => this.checkScheduledItems(), 15000);
+    },
+
+    async requestNotificationPermission() {
+        if ('Notification' in window && Notification.permission === 'default') {
+            try { await Notification.requestPermission(); } catch (e) {}
+        }
+    },
+
+    getScheduledDateTime(item) {
+        if (!item || (!item.date && !item.dueDate && !item.due_date)) return null;
+        const date = item.date || item.dueDate || item.due_date;
+        const time = item.time || item.dueTime || item.due_time;
+        if ((item.dueDate || item.due_date) && !time) return null;
+        const value = new Date(`${date}T${time}`);
+        return Number.isNaN(value.getTime()) ? null : value;
+    },
+
+    playAlarmSound() {
+        try {
+            const context = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = context.createOscillator();
+            const gain = context.createGain();
+            oscillator.frequency.value = 880;
+            oscillator.type = 'sine';
+            gain.gain.value = 0.12;
+            oscillator.connect(gain);
+            gain.connect(context.destination);
+            oscillator.start();
+            setTimeout(() => { oscillator.stop(); context.close(); }, 700);
+        } catch (e) {}
+    },
+
+    notifyScheduledItem(type, item) {
+        const key = `${type}_${item.id || item._id}_${item.date || item.dueDate || item.due_date}_${item.time || item.dueTime || item.due_time || ''}`;
+        const notified = this.get('notifications') || [];
+        if (notified.includes(key)) return;
+        notified.push(key);
+        this.set('notifications', notified.slice(-100));
+        this.playAlarmSound();
+        this.logActivity(`Reminder: ${item.title || 'Scheduled item'} is due now and marked incomplete.`);
+        if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(type === 'task' ? 'Task Reminder' : 'Meeting Reminder', {
+                body: `${item.title || 'Scheduled item'} is due now. NOTE: Incomplete`,
+                tag: key
+            });
+        }
+    },
+
+    async checkScheduledItems() {
+        const now = new Date();
+        const tasks = this.get('tasks') || [];
+        const meetings = this.get('meetings') || [];
+        let tasksChanged = false;
+        let meetingsChanged = false;
+
+        for (const task of tasks) {
+            const scheduled = this.getScheduledDateTime(task);
+            if (!scheduled) continue;
+            if (scheduled.getTime() <= now.getTime()) {
+                if (!task.overdue) {
+                    task.overdue = true;
+                    task.completed = false;
+                    tasksChanged = true;
+                    await this.updateTaskToBackend(task);
+                    this.notifyScheduledItem('task', task);
+                }
+            }
+        }
+
+        for (const meeting of meetings) {
+            const scheduled = this.getScheduledDateTime(meeting);
+            if (!scheduled) continue;
+            if (scheduled.getTime() <= now.getTime()) {
+                if (!meeting.overdue) {
+                    meeting.overdue = true;
+                    meeting.completed = false;
+                    meetingsChanged = true;
+                    await this.updateMeetingToBackend(meeting);
+                    this.notifyScheduledItem('meeting', meeting);
+                }
+            }
+        }
+
+        if (tasksChanged) this.set('tasks', tasks);
+        if (meetingsChanged) this.set('meetings', meetings);
+        if (tasksChanged || meetingsChanged) this.dispatchViewSpecificRenders();
     },
 
     // Flexible Event Delegation Listener for Checkbox interactions
@@ -645,9 +777,7 @@ const WorkspaceCore = {
                         id: Date.now().toString(),
                         title: data.title,
                         dueDate: data.dueDate || new Date().toISOString().split('T')[0],
-                        completed: false,
-                        priority: data.priority || "medium",
-                        category: data.category || "General"
+                        completed: false
                     };
                     tasks.push(newTask);
                     this.set('tasks', tasks);
@@ -689,7 +819,6 @@ const WorkspaceCore = {
                         title: data.title,
                         date: data.date || new Date().toISOString().split('T')[0],
                         time: data.time || "12:00",
-                        participants: data.participants || "",
                         description: data.description || "",
                         completed: false
                     };

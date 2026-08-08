@@ -52,6 +52,8 @@
 
         .meeting-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border-color); border-left: 5px solid #ec4899; margin-bottom: 12px; }
         .meeting-item.completed { opacity: 0.5; border-left-color: #10b981; }
+        .meeting-item.overdue { border-left-color: #ef4444; }
+        .status-note { margin-top: 6px; font-size: 0.8rem; font-weight: 700; color: #ef4444; }
         
         .voice-fab { position: fixed; bottom: 32px; right: 32px; width: 64px; height: 64px; border-radius: 50%; background: var(--accent-gradient); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border: none; cursor: pointer; z-index: 1000; }
         .voice-fab.listening { animation: pulse 1.5s infinite; background: linear-gradient(135deg, #ef4444, #ec4899); }
@@ -128,6 +130,7 @@
             <div class="card">
                 <h3 style="margin-bottom:16px;">Schedule Sync Session</h3>
                 <form id="meeting-form" onsubmit="saveMeetingObject(event)">
+                    <input type="hidden" id="meeting-edit-id">
                     <div class="form-group">
                         <label>Session Title</label>
                         <input type="text" id="meet-title" class="form-control" required placeholder="Project Scrum, Review, etc...">
@@ -139,10 +142,6 @@
                     <div class="form-group">
                         <label>Execution Timeline (Time)</label>
                         <input type="time" id="meet-time" class="form-control" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Participants</label>
-                        <input type="text" id="meet-participants" class="form-control" placeholder="Names or emails split by commas..." required>
                     </div>
                     <div class="form-group">
                         <label>Agenda Description Context</label>
@@ -164,33 +163,12 @@
 
     <script src="main.js"></script>
     <script>
-        // Storage abstraction layer interfacing with WorkspaceCore state engine
         const MeetingStorage = {
-            get() { 
-                if (typeof WorkspaceCore !== 'undefined') {
-                    return WorkspaceCore.get('meetings') || [];
-                }
-                return JSON.parse(localStorage.getItem('meetings')) || []; 
-            },
-            set(d) { 
-                if (typeof WorkspaceCore !== 'undefined') {
-                    WorkspaceCore.set('meetings', d);
-                } else {
-                    localStorage.setItem('meetings', JSON.stringify(d)); 
-                }
-            },
-            log(text) {
-                if (typeof WorkspaceCore !== 'undefined' && typeof WorkspaceCore.logActivity === 'function') {
-                    WorkspaceCore.logActivity(text);
-                } else {
-                    let logs = JSON.parse(localStorage.getItem('activity')) || [];
-                    logs.unshift({log: text, time: new Date().toLocaleString()});
-                    localStorage.setItem('activity', JSON.stringify(logs.slice(0, 15)));
-                }
-            }
+            get() { return WorkspaceCore.get('meetings') || []; },
+            set(data) { WorkspaceCore.set('meetings', data); },
+            log(text) { WorkspaceCore.logActivity(text); }
         };
 
-        // Render current meeting sessions agenda
         function renderMeetingAgenda() {
             const meetings = MeetingStorage.get();
             const wrapper = document.getElementById('meetings-list-render-zone');
@@ -202,61 +180,73 @@
                 return;
             }
 
-            // Safe chronological sorting
             const sortedMeetings = [...meetings].sort((a,b) => new Date((a.date || '') + ' ' + (a.time || '')) - new Date((b.date || '') + ' ' + (b.time || '')));
 
-            wrapper.innerHTML = sortedMeetings.map(m => `
-                <div class="meeting-item ${m.completed ? 'completed' : ''}">
+            wrapper.innerHTML = sortedMeetings.map(m => {
+                const overdue = !!m.overdue;
+                const completed = !!m.completed && !overdue;
+                return `
+                <div class="meeting-item ${completed ? 'completed' : ''} ${overdue ? 'overdue' : ''}">
                     <div>
-                        <strong style="font-size:1.1rem; ${m.completed ? 'text-decoration:line-through;' : ''}">${m.title}</strong>
+                        <strong style="font-size:1.1rem; ${completed || overdue ? 'text-decoration:line-through;' : ''}">${m.title}</strong>
                         <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:6px;">
-                            <i class="fa-solid fa-calendar"></i> ${m.date || 'No Date'} at ${m.time || 'No Time'} ${m.participants ? `| <strong>Roster:</strong> ${m.participants}` : ''}
+                            <i class="fa-solid fa-calendar"></i> ${m.date || 'No Date'} at ${m.time || 'No Time'}
                         </div>
                         <p style="font-size:0.9rem; margin-top:8px; color:var(--text-primary);">${m.description || 'No descriptive agenda provided.'}</p>
+                        ${overdue ? '<div class="status-note">NOTE: Incomplete</div>' : ''}
                     </div>
                     <div style="display:flex; gap:6px; align-items:center;">
                         <button class="btn-submit" style="padding:6px 12px; background:var(--accent-color); width:auto;" onclick="editMeetingRecord(${m.id})"><i class="fa-solid fa-pen"></i></button>
-                        <button class="btn-submit" style="padding:6px 12px; background:#10b981; width:auto;" onclick="toggleMeetingState(${m.id})"><i class="fa-solid fa-check"></i></button>
+                        ${overdue ? '' : `<button class="btn-submit" style="padding:6px 12px; background:#10b981; width:auto;" onclick="toggleMeetingState(${m.id})"><i class="fa-solid fa-check"></i></button>`}
                         <button class="btn-submit" style="padding:6px 12px; background:#ef4444; width:auto;" onclick="deleteMeetingRecord(${m.id})"><i class="fa-solid fa-trash"></i></button>
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         }
 
         function editMeetingRecord(id) {
-            let meetings = MeetingStorage.get();
-            let recordToUpdate = meetings.find(m => String(m.id) === String(id));
-            
+            const meetings = MeetingStorage.get();
+            const recordToUpdate = meetings.find(m => String(m.id) === String(id));
             if (!recordToUpdate) return;
-            
-            const newTitle = prompt("Update Meeting Title:", recordToUpdate.title);
-            if (newTitle === null || newTitle.trim() === "") return;
-            
-            recordToUpdate.title = newTitle.trim();
-            
-            MeetingStorage.set(meetings); 
-            renderMeetingAgenda();
-            if (typeof WorkspaceCore !== 'undefined' && typeof WorkspaceCore.dispatchViewSpecificRenders === 'function') {
-                WorkspaceCore.dispatchViewSpecificRenders();
-            }
+
+            document.getElementById('meeting-edit-id').value = recordToUpdate.id;
+            document.getElementById('meet-title').value = recordToUpdate.title || '';
+            document.getElementById('meet-date').value = recordToUpdate.date || '';
+            document.getElementById('meet-time').value = recordToUpdate.time || '';
+            document.getElementById('meet-desc').value = recordToUpdate.description || '';
+            document.querySelector('#meeting-form .btn-submit').innerText = 'Update Session';
+            document.querySelector('#meeting-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
-        function saveMeetingObject(e) {
+        async function saveMeetingObject(e) {
             e.preventDefault();
-            const title = document.getElementById('meet-title').value;
+            const title = document.getElementById('meet-title').value.trim();
             const date = document.getElementById('meet-date').value;
             const time = document.getElementById('meet-time').value;
-            const participants = document.getElementById('meet-participants').value;
-            const description = document.getElementById('meet-desc').value;
+            const description = document.getElementById('meet-desc').value.trim();
+            const editId = document.getElementById('meeting-edit-id').value;
 
-            const meetings = MeetingStorage.get();
-            meetings.unshift({id: Date.now(), title, date, time, participants, description, completed: false});
-            
+            let meetings = MeetingStorage.get();
+            const meetingData = { title, date, time, description, overdue: false, completed: false };
+
+            if (editId) {
+                meetings = meetings.map(m => String(m.id) === String(editId) ? { ...m, ...meetingData } : m);
+                const updatedMeeting = meetings.find(m => String(m.id) === String(editId));
+                MeetingStorage.log(`Meeting updated: "${title}"`);
+                if (typeof WorkspaceCore !== 'undefined') await WorkspaceCore.updateMeetingToBackend(updatedMeeting);
+            } else {
+                const newMeeting = { id: Date.now(), ...meetingData, completed: false };
+                meetings.unshift(newMeeting);
+                MeetingStorage.log(`Meeting agenda booked manually: "${title}"`);
+                if (typeof WorkspaceCore !== 'undefined') await WorkspaceCore.saveMeetingToBackend(newMeeting);
+            }
+
             MeetingStorage.set(meetings);
-            MeetingStorage.log(`Meeting agenda booked manually: "${title}"`);
             document.getElementById('meeting-form').reset();
+            document.getElementById('meeting-edit-id').value = '';
+            document.querySelector('#meeting-form .btn-submit').innerText = 'Commit Session Array';
             renderMeetingAgenda();
-            
+
             if (typeof WorkspaceCore !== 'undefined' && typeof WorkspaceCore.renderDashboardView === 'function') {
                 WorkspaceCore.renderDashboardView();
             }
@@ -290,7 +280,6 @@
                 renderMeetingAgenda();
             }
         }
-        // Attach layout initializer on page load
         window.addEventListener('DOMContentLoaded', () => {
             renderMeetingAgenda();
         });
