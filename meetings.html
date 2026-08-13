@@ -169,6 +169,15 @@
             log(text) { WorkspaceCore.logActivity(text); }
         };
 
+        function escapeHtmlAttribute(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/\"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/'/g, '&#39;');
+        }
+
         function renderMeetingAgenda() {
             const meetings = MeetingStorage.get();
             const wrapper = document.getElementById('meetings-list-render-zone');
@@ -198,6 +207,7 @@
                     <div style="display:flex; gap:6px; align-items:center;">
                         <button class="btn-submit" style="padding:6px 12px; background:var(--accent-color); width:auto;" onclick="editMeetingRecord(${m.id})"><i class="fa-solid fa-pen"></i></button>
                         ${overdue ? '' : `<button class="btn-submit" style="padding:6px 12px; background:#10b981; width:auto;" onclick="toggleMeetingState(${m.id})"><i class="fa-solid fa-check"></i></button>`}
+                        <button type="button" class="btn-submit" style="padding:6px 12px; background:#4285f4; width:auto;" data-title="${escapeHtmlAttribute(m.title || 'Meeting')}" data-date="${escapeHtmlAttribute(m.date || '')}" data-time="${escapeHtmlAttribute(m.time || '')}" data-description="${escapeHtmlAttribute(m.description || '')}" onclick="addToGoogleCalendarFromButton(this)" title="Add to Google Calendar"><i class="fa-brands fa-google"></i></button>
                         <button class="btn-submit" style="padding:6px 12px; background:#ef4444; width:auto;" onclick="deleteMeetingRecord(${m.id})"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>`;
