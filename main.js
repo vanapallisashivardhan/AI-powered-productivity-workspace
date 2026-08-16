@@ -1,45 +1,6 @@
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
 
-window.addToGoogleCalendar = function(title, date, time, description = '') {
-    if (!date || !time || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {
-        alert('A valid date and time are required to add this item to Google Calendar.');
-        return;
-    }
-
-    const startDate = new Date(`${date}T${time}:00`);
-    if (Number.isNaN(startDate.getTime())) {
-        alert('The selected date or time is invalid.');
-        return;
-    }
-
-    const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
-    const formatCalendarDate = value => {
-        const pad = number => String(number).padStart(2, '0');
-        return `${value.getFullYear()}${pad(value.getMonth() + 1)}${pad(value.getDate())}T${pad(value.getHours())}${pad(value.getMinutes())}${pad(value.getSeconds())}`;
-    };
-
-    const params = new URLSearchParams({
-        action: 'TEMPLATE',
-        text: title || 'Productivity Workspace Event',
-        dates: `${formatCalendarDate(startDate)}/${formatCalendarDate(endDate)}`
-    });
-
-    if (description) params.set('details', description);
-
-    const calendarUrl = `https://calendar.google.com/calendar/render?${params.toString()}`;
-    const calendarTab = window.open(calendarUrl, 'googleCalendarTab');
-    if (calendarTab) calendarTab.focus();
-};
-window.addToGoogleCalendarFromButton = function(button) {
-    addToGoogleCalendar(
-        button.dataset.title || 'Productivity Workspace Event',
-        button.dataset.date || '',
-        button.dataset.time || '',
-        button.dataset.description || ''
-    );
-};
-
 const WorkspaceCore = {
 
     // 0. Active User Context Manager
@@ -317,56 +278,8 @@ const WorkspaceCore = {
         }
     },
 
-    async setupPushNotifications() {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return false;
-        try {
-            const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
-            if (permission !== 'granted') return false;
-
-            const registration = await navigator.serviceWorker.register('/sw.js');
-            await navigator.serviceWorker.ready;
-            const keyResponse = await fetch('/api/push/vapid-public-key', {
-                headers: { 'Authorization': `Bearer ${this.getAuthToken()}` }
-            });
-            if (!keyResponse.ok) return false;
-            const { publicKey } = await keyResponse.json();
-            const applicationServerKey = this.urlBase64ToUint8Array(publicKey);
-            let subscription = await registration.pushManager.getSubscription();
-            if (!subscription) {
-                subscription = await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey
-                });
-            }
-
-            const response = await fetch('/api/push/subscribe', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.getAuthToken()}`
-                },
-                body: JSON.stringify(subscription)
-            });
-            this.pushReady = response.ok;
-            return this.pushReady;
-        } catch (error) {
-            console.error('Desktop push notification setup failed:', error);
-            this.pushReady = false;
-            return false;
-        }
-    },
-
-    urlBase64ToUint8Array(base64String) {
-        const padding = '='.repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-        const rawData = atob(base64);
-        return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
-    },
-
     initAlarmSystem() {
         if (this.alarmTimer) return;
-        this.pushReady = false;
-        this.setupPushNotifications();
         this.requestNotificationPermission();
         this.checkScheduledItems();
         this.alarmTimer = setInterval(() => this.checkScheduledItems(), 15000);
@@ -410,7 +323,7 @@ const WorkspaceCore = {
         this.set('notifications', notified.slice(-100));
         this.playAlarmSound();
         this.logActivity(`Reminder: ${item.title || 'Scheduled item'} is due now and marked incomplete.`);
-        if (!this.pushReady && 'Notification' in window && Notification.permission === 'granted') {
+        if ('Notification' in window && Notification.permission === 'granted') {
             new Notification(type === 'task' ? 'Task Reminder' : 'Meeting Reminder', {
                 body: `${item.title || 'Scheduled item'} is due now. NOTE: Incomplete`,
                 tag: key

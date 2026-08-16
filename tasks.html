@@ -177,15 +177,6 @@
 
     <script src="main.js"></script>
     <script>
-        function escapeHtmlAttribute(value) {
-            return String(value ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/\"/g, '&quot;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/'/g, '&#39;');
-        }
-
         window.renderTaskCollection = function() {
             if (typeof WorkspaceCore === 'undefined') return;
             const tasks = WorkspaceCore.get('tasks') || [];
@@ -232,7 +223,6 @@
                     <div class="task-actions">
                         <button class="action-btn edit" onclick="editTaskRecord(${t.id})" title="Edit Task Requirements"><i class="fa-solid fa-pen-to-square"></i></button>
                         ${overdue ? '' : `<button class="action-btn complete" onclick="toggleTaskCompletion(${t.id})" title="Toggle Completion Status"><i class="fa-solid ${completed ? 'fa-rotate-left' : 'fa-circle-check'}"></i></button>`}
-                        <button type="button" class="action-btn" data-title="${escapeHtmlAttribute(t.title || 'Untitled')}" data-date="${escapeHtmlAttribute(t.dueDate || t.due_date || '')}" data-time="${escapeHtmlAttribute(t.dueTime || t.due_time || '')}" onclick="addToGoogleCalendarFromButton(this)" title="Add to Google Calendar"><i class="fa-brands fa-google"></i></button>
                         <button class="action-btn delete" onclick="deleteTaskRecord(${t.id})" title="Destroy Object Record"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>

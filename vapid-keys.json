@@ -1,0 +1,11 @@
+{
+  "privateJwk": {
+    "kty": "EC",
+    "x": "qVNMIUn4udNx-A4X1Rjz1IXMTZTKZUsHNlEtsiA3_Es",
+    "y": "6y4mNu2QzEX0hhwhO02EbeaGCMiSIkfTHoNWGFG3BR0",
+    "crv": "P-256",
+    "d": "okKJqd6DZLYUlHc5AW73fsgkB4Yn2pkiDkOD_dgf_Bo"
+  },
+  "publicKey": "BKlTTCFJ-LnTcfgOF9UY89SFzE2UymVLBzZRLbIgN_xL6y4mNu2QzEX0hhwhO02EbeaGCMiSIkfTHoNWGFG3BR0",
+  "subject": "mailto:admin@example.com"
+}

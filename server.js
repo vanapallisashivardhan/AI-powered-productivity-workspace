@@ -7,9 +7,6 @@ import OpenAI from 'openai';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
-import fs from 'fs';
-import { sendWebPush, createVapidKeys } from './push-utils.js';
 
 const app = express();
 app.use(cors());
@@ -60,8 +57,7 @@ const taskSchema = new mongoose.Schema({
     due_date: { type: String },
     due_time: { type: String, default: "" },
     completed: { type: Boolean, default: false },
-    overdue: { type: Boolean, default: false },
-    pushNotified: { type: Boolean, default: false }
+    overdue: { type: Boolean, default: false }
 }, { timestamps: true });
 
 // Scoped uniqueness per user (User A & User B can both have an item with id: 1)
@@ -76,8 +72,7 @@ const meetingSchema = new mongoose.Schema({
     time: { type: String, default: "12:00" },
     description: { type: String, default: "" },
     completed: { type: Boolean, default: false },
-    overdue: { type: Boolean, default: false },
-    pushNotified: { type: Boolean, default: false }
+    overdue: { type: Boolean, default: false }
 }, { timestamps: true });
 
 // Scoped uniqueness per user
@@ -87,79 +82,6 @@ const User = mongoose.model('User', userSchema);
 const UserProfile = mongoose.model('UserProfile', userProfileSchema);
 const Task = mongoose.model('Task', taskSchema);
 const Meeting = mongoose.model('Meeting', meetingSchema);
-
-const pushSubscriptionSchema = new mongoose.Schema({
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
-    endpoint: { type: String, required: true },
-    expirationTime: { type: Number, default: null },
-    keys: {
-        p256dh: { type: String, required: true },
-        auth: { type: String, required: true }
-    }
-}, { timestamps: true });
-
-const PushSubscription = mongoose.model('PushSubscription', pushSubscriptionSchema);
-
-const vapidFile = './vapid-keys.json';
-let vapid;
-if (fs.existsSync(vapidFile)) {
-    vapid = JSON.parse(fs.readFileSync(vapidFile, 'utf8'));
-} else {
-    const generated = createVapidKeys();
-    vapid = { ...generated, subject: 'mailto:admin@example.com' };
-    fs.writeFileSync(vapidFile, JSON.stringify(vapid, null, 2));
-}
-
-function toScheduledDateTime(date, time) {
-    if (!date || !time) return null;
-    const value = new Date(`${date}T${time}:00`);
-    return Number.isNaN(value.getTime()) ? null : value;
-}
-
-async function sendScheduledPushes() {
-    if (mongoose.connection.readyState !== 1) return;
-    const now = new Date();
-    const subscriptions = await PushSubscription.find({});
-    for (const subscription of subscriptions) {
-        try {
-            const [tasks, meetings] = await Promise.all([
-                Task.find({ userId: subscription.userId, completed: false, overdue: false, pushNotified: false }),
-                Meeting.find({ userId: subscription.userId, completed: false, overdue: false, pushNotified: false })
-            ]);
-
-            for (const task of tasks) {
-                const scheduled = toScheduledDateTime(task.due_date, task.due_time);
-                if (!scheduled || scheduled.getTime() > now.getTime()) continue;
-                await sendWebPush(subscription.toObject(), JSON.stringify({
-                    title: 'Task Reminder',
-                    body: `${task.title || 'Scheduled task'} is due now.`,
-                    url: '/tasks.html',
-                    tag: `task-${task.id}`
-                }), vapid);
-                await Task.updateOne({ _id: task._id }, { $set: { pushNotified: true, overdue: true, completed: false } });
-            }
-
-            for (const meeting of meetings) {
-                const scheduled = toScheduledDateTime(meeting.date, meeting.time);
-                if (!scheduled || scheduled.getTime() > now.getTime()) continue;
-                await sendWebPush(subscription.toObject(), JSON.stringify({
-                    title: 'Meeting Reminder',
-                    body: `${meeting.title || 'Scheduled meeting'} is due now.`,
-                    url: '/meetings.html',
-                    tag: `meeting-${meeting.id}`
-                }), vapid);
-                await Meeting.updateOne({ _id: meeting._id }, { $set: { pushNotified: true, overdue: true, completed: false } });
-            }
-        } catch (error) {
-            if (error.status === 404 || error.status === 410) {
-                await PushSubscription.deleteOne({ _id: subscription._id });
-            } else {
-                console.error('Push notification error:', error.message);
-            }
-        }
-    }
-}
-
 
 // --- 3. JWT Authentication Middleware ---
 const authenticateToken = (req, res, next) => {
@@ -479,8 +401,7 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
             due_date: task.dueDate || task.due_date || new Date().toISOString().split('T')[0],
             due_time: task.dueTime || task.due_time || "",
             completed: filterStringToBoolean(task.completed),
-            overdue: filterStringToBoolean(task.overdue),
-            pushNotified: task.pushNotified === true ? true : false
+            overdue: filterStringToBoolean(task.overdue)
         };
 
         await Task.findOneAndUpdate(
@@ -512,10 +433,6 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
         }
         if (updateFields.completed !== undefined) {
             updateFields.completed = filterStringToBoolean(updateFields.completed);
-        }
-        if (updateFields.due_date !== undefined || updateFields.due_time !== undefined) {
-            updateFields.pushNotified = false;
-            updateFields.overdue = false;
         }
 
         const updatedTask = await Task.findOneAndUpdate(
@@ -576,8 +493,7 @@ app.post('/api/meetings', authenticateToken, async (req, res) => {
             time: meeting.time || "12:00",
             description: meeting.description || "",
             completed: filterStringToBoolean(meeting.completed),
-            overdue: filterStringToBoolean(meeting.overdue),
-            pushNotified: meeting.pushNotified === true ? true : false
+            overdue: filterStringToBoolean(meeting.overdue)
         };
 
         await Meeting.findOneAndUpdate(
@@ -599,10 +515,6 @@ app.put('/api/meetings/:id', authenticateToken, async (req, res) => {
 
         if (updateFields.completed !== undefined) {
             updateFields.completed = filterStringToBoolean(updateFields.completed);
-        }
-        if (updateFields.date !== undefined || updateFields.time !== undefined) {
-            updateFields.pushNotified = false;
-            updateFields.overdue = false;
         }
         const updatedMeeting = await Meeting.findOneAndUpdate(
             { userId: req.user.userId, id: meetingId },
@@ -628,46 +540,6 @@ app.delete('/api/meetings/:id', authenticateToken, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
-
-app.get('/api/push/vapid-public-key', authenticateToken, (req, res) => {
-    res.json({ publicKey: vapid.publicKey });
-});
-
-app.post('/api/push/subscribe', authenticateToken, async (req, res) => {
-    try {
-        const subscription = req.body;
-        if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
-            return res.status(400).json({ error: 'Invalid push subscription.' });
-        }
-        await PushSubscription.findOneAndUpdate(
-            { userId: req.user.userId },
-            {
-                userId: req.user.userId,
-                endpoint: subscription.endpoint,
-                expirationTime: subscription.expirationTime || null,
-                keys: subscription.keys
-            },
-            { upsert: true, returnDocument: 'after' }
-        );
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.delete('/api/push/subscribe', authenticateToken, async (req, res) => {
-    try {
-        await PushSubscription.deleteOne({ userId: req.user.userId });
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-setInterval(() => {
-    sendScheduledPushes().catch(error => console.error('Scheduled push check failed:', error.message));
-}, 10000);
 
 // --- 9. START EXPRESS SERVER ---
 const PORT = process.env.PORT || 3000;

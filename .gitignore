@@ -1,5 +1,3 @@
-
-vapid-keys.json
-.env
 node_modules/
+.env
 .vscode/
