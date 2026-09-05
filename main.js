@@ -278,6 +278,43 @@ const WorkspaceCore = {
         }
     },
 
+    openGoogleCalendarEvent({ title, date, time, description = '', durationMinutes = 30, type = 'Task' }) {
+        if (!title || !date || !time) {
+            alert('Please provide a title, date, and time before scheduling a Google Calendar reminder.');
+            return false;
+        }
+
+        const start = new Date(`${date}T${time}`);
+        if (Number.isNaN(start.getTime())) {
+            alert('The selected date or time is invalid.');
+            return false;
+        }
+
+        const end = new Date(start.getTime() + durationMinutes * 60000);
+        const pad = value => String(value).padStart(2, '0');
+        const formatCalendarDate = value => `${value.getFullYear()}${pad(value.getMonth() + 1)}${pad(value.getDate())}T${pad(value.getHours())}${pad(value.getMinutes())}00`;
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+        const params = new URLSearchParams({
+            action: 'TEMPLATE',
+            text: `${type} Reminder: ${title}`,
+            dates: `${formatCalendarDate(start)}/${formatCalendarDate(end)}`,
+            ctz: timezone,
+            details: description || `Scheduled ${type.toLowerCase()} from AI Productivity Workspace.
+Reminder created from the workspace.`
+        });
+
+        const calendarUrl = `https://calendar.google.com/calendar/render?${params.toString()}`;
+        const calendarWindow = window.open(calendarUrl, '_blank');
+
+        if (!calendarWindow) {
+            alert('Google Calendar could not be opened. Please allow pop-ups for this site and try again.');
+            return false;
+        }
+
+        this.logActivity(`Google Calendar reminder opened for ${type.toLowerCase()}: "${title}"`);
+        return true;
+    },
+
     initAlarmSystem() {
         if (this.alarmTimer) return;
         this.requestNotificationPermission();

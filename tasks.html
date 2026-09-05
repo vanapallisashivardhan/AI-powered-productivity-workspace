@@ -153,6 +153,7 @@
                         <input type="time" id="task-duetime" class="form-control" required>
                     </div>
                     <button type="submit" id="submit-btn" class="btn-submit">Commit to Storage Matrix</button>
+                    <button type="button" id="google-reminder-btn" class="btn-submit" style="margin-top:10px;background:#4285f4;" onclick="saveTaskAndScheduleReminder()"><i class="fa-brands fa-google"></i> Schedule Google Calendar Reminder</button>
                 </form>
             </div>
 
@@ -242,6 +243,27 @@
             
             document.getElementById('form-title').innerText = "Update Workspace Task";
             document.getElementById('submit-btn').innerText = "Update Matrix Record";
+        }
+
+        function saveTaskAndScheduleReminder() {
+            const form = document.getElementById('task-creation-form');
+            if (!form.reportValidity()) return;
+
+            const title = document.getElementById('task-title').value.trim();
+            const dueDate = document.getElementById('task-duedate').value;
+            const dueTime = document.getElementById('task-duetime').value;
+            const id = document.getElementById('task-edit-id').value;
+
+            saveTaskRecord(new Event('submit', { cancelable: true }));
+
+            WorkspaceCore.openGoogleCalendarEvent({
+                title,
+                date: dueDate,
+                time: dueTime,
+                type: 'Task',
+                description: `Task scheduled in AI Productivity Workspace.
+Task: ${title}`
+            });
         }
 
         function saveTaskRecord(e) {

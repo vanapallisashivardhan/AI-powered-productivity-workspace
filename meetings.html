@@ -148,6 +148,7 @@
                         <textarea id="meet-desc" class="form-control" rows="3" placeholder="Define meeting criteria goals..."></textarea>
                     </div>
                     <button type="submit" class="btn-submit">Commit Session Array</button>
+                    <button type="button" class="btn-submit" style="margin-top:10px;background:#4285f4;" onclick="saveMeetingAndScheduleReminder()"><i class="fa-brands fa-google"></i> Schedule Google Calendar Reminder</button>
                 </form>
             </div>
 
@@ -216,6 +217,27 @@
             document.getElementById('meet-desc').value = recordToUpdate.description || '';
             document.querySelector('#meeting-form .btn-submit').innerText = 'Update Session';
             document.querySelector('#meeting-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        async function saveMeetingAndScheduleReminder() {
+            const form = document.getElementById('meeting-form');
+            if (!form.reportValidity()) return;
+
+            const title = document.getElementById('meet-title').value.trim();
+            const date = document.getElementById('meet-date').value;
+            const time = document.getElementById('meet-time').value;
+            const description = document.getElementById('meet-desc').value.trim();
+
+            await saveMeetingObject(new Event('submit', { cancelable: true }));
+
+            WorkspaceCore.openGoogleCalendarEvent({
+                title,
+                date,
+                time,
+                type: 'Meeting',
+                description: description || `Meeting scheduled in AI Productivity Workspace.
+Meeting: ${title}`
+            });
         }
 
         async function saveMeetingObject(e) {
