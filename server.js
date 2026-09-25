@@ -16,8 +16,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static('.'));
 
-const JWT_SECRET = process.env.JWT_SECRET || 'productivity_workspace_jwt_secret_key_2026';
-
+const JWT_SECRET = process.env.JWT_SECRET;
 // --- 1. MongoDB Connection ---
 const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || "";
 
