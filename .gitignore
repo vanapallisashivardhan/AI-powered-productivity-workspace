@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*credentials*
+*secret*
+vapid-keys.json
+.vercel/.env.*
+npm-debug.log*
